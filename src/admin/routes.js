@@ -40,6 +40,13 @@ export async function installAdmin(app, system, config) {
   }
   app.post('/api/admin/device/:id/return-home', async (req, res) => { await registry.selectImage(req.params.id, null); await registry.setMode(req.params.id, 'normal'); ok(res, await commands.enqueue(req.params.id, 'refresh')); });
   app.get('/api/admin/images', (req, res) => ok(res, images.list()));
+  app.get('/api/admin/images/trash', (req, res) => ok(res, images.list(true)));
+  app.delete('/api/admin/images/:id', async (req, res) => {
+    const entry = await images.trash(req.params.id); display.forgetImage(entry.imageId); await commands.cancelImage(entry.imageId);
+    for (const d of registry.list().filter(d => d.selectedImageId === entry.imageId)) { await registry.selectImage(d.internalUuid, null); display.invalidate(d.profile); await commands.enqueue(d.internalUuid, 'refresh'); }
+    ok(res, null);
+  });
+  app.post('/api/admin/images/:id/restore', async (req, res) => ok(res, await images.restore(req.params.id)));
   app.get('/api/admin/render', (req, res) => ok(res, display.info()));
   app.put('/api/admin/render', async (req, res) => ok(res, await settings.saveRender(req.body)));
   app.post('/api/admin/images/generate', async (req, res) => {
@@ -49,10 +56,12 @@ export async function installAdmin(app, system, config) {
     res.status(201); ok(res, images.describe(image.imageId));
   });
   app.get('/api/admin/render/profiles/:id', async (req, res) => ok(res, await profiles.source(req.params.id)));
+  app.post('/api/admin/render/profiles', async (req, res) => { const result = await profiles.create(req.body); res.status(201); ok(res, result); });
   app.put('/api/admin/render/profiles/:id', async (req, res) => { const result = await profiles.save(req.params.id, req.body); display.invalidate(req.params.id); ok(res, result); });
   app.post('/api/admin/render/profiles/reload', async (req, res) => { const result = await profiles.reload(); display.invalidate(); ok(res, result); });
   app.get('/api/admin/weather', async (req, res) => ok(res, { ...settings.weatherInfo(), weather: await weather.get(config.location) }));
   app.put('/api/admin/weather', async (req, res) => ok(res, await settings.saveWeather(req.body)));
+  app.post('/api/admin/weather/lookup', async (req, res) => ok(res, await settings.lookupGeo(req.body)));
   app.get('/api/admin/system', (req, res) => ok(res, settings.systemInfo()));
   app.get('/api/admin/logs', (req, res) => ok(res, log.list()));
   app.put('/api/admin/system', async (req, res) => ok(res, await settings.saveSystem(req.body)));

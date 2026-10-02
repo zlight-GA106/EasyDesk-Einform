@@ -4,7 +4,7 @@ import YAML from 'yaml';
 import { atomicWrite } from '../storage/json-store.js';
 import { check, number, boundedText, identifier } from '../errors.js';
 
-export const BLOCK_TYPES = ['header', 'date', 'current', 'almanac', 'hourly', 'daily', 'details', 'content', 'status', 'text'];
+export const BLOCK_TYPES = ['header', 'date', 'lunar', 'current', 'almanac', 'hourly', 'daily', 'details', 'content', 'status', 'text'];
 export function profileId(value) {
   identifier(value, 'profile');
   check(!['constructor', 'prototype', '__proto__'].includes(value), 'profile 名称无效');
@@ -56,9 +56,26 @@ export class Profiles {
     try { yaml = await fs.readFile(path.join(this.config.render.profileDir, `${id}.yaml`), 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw e; yaml = YAML.stringify(this.list()[id]); }
     return { id, profile: this.list()[id], yaml };
   }
-  save(id, body) {
+  create(body) {
+    check(body && Object.keys(body).every(k => ['id', 'label', 'width', 'height', 'template', 'from'].includes(k)), '新建 Profile 字段无效');
+    check(['blank', 'standard', 'copy'].includes(body.template), '请选择画布模板');
+    let profile;
+    if (body.template === 'copy') { profileId(body.from); check(Object.hasOwn(this.list(), body.from), '来源 Profile 不存在'); profile = { ...structuredClone(this.list()[body.from]), label: body.label, width: body.width, height: body.height }; }
+    else {
+      const canvas = { width: body.width, height: body.height };
+      check(Number.isInteger(body.width) && body.width >= 200 && body.width <= 4096 && Number.isInteger(body.height) && body.height >= 200 && body.height <= 4096, '宽高必须为 200–4096 的整数像素');
+      const layout = body.template === 'blank' ? [{ id: 'text', type: 'text', x: 10, y: 10, width: body.width - 20, height: body.height - 20, fontSize: 26, text: '', enabled: true }] : this.fallback.layout.map(b => {
+        const sx = body.width / this.fallback.canvas.width, sy = body.height / this.fallback.canvas.height;
+        const x = Math.round(b.x * sx), y = Math.round(b.y * sy);
+        return { ...b, x, y, width: Math.min(body.width - x, Math.max(10, Math.round(b.width * sx))), height: Math.min(body.height - y, Math.max(10, Math.round(b.height * sy))) };
+      });
+      profile = { label: body.label, width: body.width, height: body.height, canvas, layout };
+    }
+    return this.save(body.id, { profile }, true);
+  }
+  save(id, body, createOnly = false) {
     const task = this.queue.then(async () => {
-      profileId(id); check(body && (body.profile || typeof body.yaml === 'string'), '需要 profile 或 YAML');
+      profileId(id); check(!createOnly || !Object.hasOwn(this.list(), id), 'Profile ID 已存在'); check(body && (body.profile || typeof body.yaml === 'string'), '需要 profile 或 YAML');
       check(body.yaml === undefined || body.yaml.length <= 24000, 'YAML 太长');
       let input; try { input = body.profile || YAML.parse(body.yaml); } catch { check(false, 'YAML 格式错误'); }
       const profile = validateProfile(input, this.fallback);

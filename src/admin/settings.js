@@ -3,7 +3,7 @@ import path from 'node:path';
 import YAML from 'yaml';
 import { root } from '../config/config.js';
 import { atomicWrite } from '../storage/json-store.js';
-import { check, boundedText, number, validateLocation } from '../errors.js';
+import { ApiError, check, boundedText, number, validateLocation } from '../errors.js';
 import { MockWeatherProvider } from '../weather/mock.js';
 import { QWeatherProvider } from '../weather/qweather.js';
 
@@ -29,7 +29,13 @@ export class Settings {
     const provider = body.provider === 'qweather' ? new QWeatherProvider({ ...this.config, qweather }) : new MockWeatherProvider(this.config.server.timezone);
     await this.persist(next => { next.location = location; next.qweather = qweather; });
     Object.assign(this.config, { location, qweather }); this.weather.provider = provider; this.weather.retries.clear();
-    this.log.info('weather_config_changed'); return this.weatherInfo();
+    this.display.invalidate(); this.log.info('weather_config_changed'); return this.weatherInfo();
+  }
+  async lookupGeo(body) {
+    check(this.config.qweather.apiHost && this.config.qweather.apiKey, '请先在天气设置中保存和风天气 API Host 与 Key，再查询区县');
+    const query = boundedText(body?.query, '查询地区', 100), adm = boundedText(body?.adm || '', '上级行政区', 64, true);
+    try { return await new QWeatherProvider(this.config).lookup(query, adm); }
+    catch { throw new ApiError(502, 'GEO_UNAVAILABLE', '和风天气地区查询失败，请检查凭据、GeoAPI 权限或网络'); }
   }
   async saveSystem(body) {
     const device = { ...this.config.device };

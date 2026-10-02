@@ -27,6 +27,7 @@ weather:
     daily: 3600
     air: 1800
     alerts: 600
+    geo: 86400
   retrySeconds: 60
 render:
   defaultProfile: portrait

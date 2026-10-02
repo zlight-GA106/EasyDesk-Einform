@@ -9,7 +9,9 @@ import { getAlmanac } from '../src/almanac/lunar.js';
 import { Renderer } from '../src/render/renderer.js';
 import { WeatherCache } from '../src/weather/weather-cache.js';
 import { MockWeatherProvider } from '../src/weather/mock.js';
-import { parseQWeather } from '../src/weather/qweather.js';
+import { parseQWeather, parseGeo, QWeatherProvider } from '../src/weather/qweather.js';
+import { layoutTemplate } from '../src/render/templates/layout.js';
+import { execFileSync } from 'node:child_process';
 import { loadFonts, svgHelpers } from '../src/render/svg.js';
 
 const silent = { info() {}, warn() {} };
@@ -65,4 +67,49 @@ test('QWeather v1 normalization follows official schema and rejects invalid data
   assert.equal(parseQWeather('now', { condition: { text: '晴', code: '100' }, temperature: { value: 26.6 }, humidity: 0.69, pressure: { value: 1001.5 } }, config).humidity, 69);
   assert.throws(() => parseQWeather('now', {}, config));
   assert.deepEqual(parseQWeather('alerts', { alerts: [{ messageType: { code: 'cancel' } }] }, config), []);
+});
+
+test('QWeather district lookup uses official GeoAPI, lat/lon precision and persistent location cache', async t => {
+  const config = await loadConfig(); config.qweather.apiHost = 'example.qweatherapi.com'; config.qweather.apiKey = 'test-key';
+  const calls = []; let offline = false;
+  const district = { code: '200', location: [{ name: '浦东新区', adm2: '上海', adm1: '上海市', id: '101020600', lat: '31.23456', lon: '121.54321' }] };
+  const provider = new QWeatherProvider(config, async (url, options) => { calls.push({ url, options }); if (offline) throw new Error('offline'); return { ok: true, json: async () => url.pathname.startsWith('/geo/') ? district : { condition: { code: '100', text: '晴' }, temperature: { value: 26 } } }; });
+  const locations = await provider.lookup('浦东新区', '上海'); assert.equal(locations[0].name, '上海 · 浦东新区'); assert.equal(locations[0].district, '浦东新区');
+  assert.equal(calls[0].url.pathname, '/geo/v2/city/lookup'); assert.equal(calls[0].url.searchParams.get('adm'), '上海'); assert.equal(calls[0].options.headers['X-QW-Api-Key'], 'test-key'); assert.ok(!calls[0].url.href.includes('test-key'));
+  await provider.fetch('now', locations[0]); assert.equal(calls[1].url.pathname, '/weather/v1/current/31.23/121.54');
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'easydesk-geo-')); t.after(() => fs.rm(directory, { recursive: true, force: true })); config.storage.cacheDir = directory;
+  const cache = await new WeatherCache(config, provider, silent).init(); await cache.entry('geo', config.location);
+  assert.equal(calls[2].url.searchParams.get('location'), '121.47,31.23'); assert.equal(calls[2].url.searchParams.get('number'), '1');
+  const resolved = await cache.get(config.location); assert.equal(resolved.location.district, '浦东新区');
+  offline = true; config.weather.ttlSeconds.geo = 0;
+  const restarted = await new WeatherCache(config, provider, silent).init(); const old = await restarted.entry('geo', config.location); assert.equal(old.data.district, '浦东新区'); assert.equal(old.stale, true);
+  assert.deepEqual(parseGeo({ code: '404' }), []); assert.throws(() => parseGeo({ code: '401' })); assert.throws(() => parseGeo({ code: '200', location: [{ name: '错误', lat: 'invalid', lon: '121' }] }));
+});
+
+test('large lunar replaces the top icon and district/current weather appears within weather section', async () => {
+  const config = await loadConfig(), a = getAlmanac(new Date('2026-10-02T10:15:00+08:00'), config.server.timezone);
+  const texts = [], helpers = { text(s, x, y, size) { texts.push({ text: s, size }); return ''; }, lines() { return ''; }, line() { return ''; } };
+  const model = { device: { location: { name: '上海 · 浦东新区', district: '浦东新区' } }, almanac: a, weather: { now: { text: '多云', temp: 26 }, hourly: [] }, now: '2026-10-02T10:15:00+08:00', timezone: config.server.timezone };
+  const blocks = config.render.fallbackProfile.layout.map(b => ({ ...b, enabled: true }));
+  const top = layoutTemplate(model, helpers, { layout: blocks.filter(b => b.type === 'lunar') });
+  assert.ok(!top.includes('<path') && !top.includes('<circle')); assert.ok(texts.some(v => v.text === '廿二' && v.size >= 48));
+  texts.length = 0; layoutTemplate(model, helpers, { layout: blocks.filter(b => b.type === 'hourly') });
+  assert.ok(texts.some(v => v.text.includes('浦东新区') && v.text.includes('多云 26℃')));
+});
+
+test('layout migration updates only unchanged standard profiles and preserves custom edits', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'easydesk-layout-migration-')); t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const config = await loadConfig(), next = structuredClone(config.render.fallbackProfile), old = structuredClone(next);
+  old.layout.find(b => b.type === 'date').showLunar = true;
+  Object.assign(old.layout.find(b => b.type === 'lunar'), { id: 'current', type: 'current', fontSize: 30 });
+  await fs.mkdir(path.join(directory, 'profiles'));
+  const YAML = (await import('yaml')).default, oldFile = path.join(directory, 'previous.yaml'); await fs.writeFile(oldFile, YAML.stringify(old));
+  const standard = { ...old, label: '已有设备', width: 758, height: 1024 }, custom = structuredClone(old); custom.layout[0].text = '用户改过的标题';
+  await fs.writeFile(path.join(directory, 'profiles', 'existing.yaml'), YAML.stringify(standard));
+  const customFile = path.join(directory, 'profiles', 'custom.yaml'), customYaml = YAML.stringify(custom); await fs.writeFile(customFile, customYaml);
+  const dry = JSON.parse(execFileSync(process.execPath, ['scripts/migrate-lunar-layout.js', directory, oldFile], { encoding: 'utf8' })); assert.deepEqual(dry.updated, ['existing.yaml']); assert.equal(dry.applied, false);
+  assert.equal(YAML.parse(await fs.readFile(path.join(directory, 'profiles', 'existing.yaml'), 'utf8')).layout[2].type, 'current');
+  execFileSync(process.execPath, ['scripts/migrate-lunar-layout.js', directory, oldFile, '--apply']);
+  const migrated = YAML.parse(await fs.readFile(path.join(directory, 'profiles', 'existing.yaml'), 'utf8')); assert.equal(migrated.width, 758); assert.equal(migrated.height, 1024); assert.equal(migrated.label, '已有设备'); assert.ok(migrated.layout.some(b => b.type === 'lunar'));
+  assert.equal(await fs.readFile(customFile,'utf8'), customYaml);
 });

@@ -38,13 +38,19 @@ export class ImageLibrary {
     if (!stat.isFile() || stat.isSymbolicLink()) throw new ApiError(503, 'IMAGE_UNAVAILABLE', '图片文件不可用');
     return target;
   }
-  describe(id, now = Date.now()) {
+  describe(id, now = Date.now(), includeDeleted = false) {
     id = uuid(id); const entry = this.store.read()[id];
-    if (!entry) throw new ApiError(404, 'IMAGE_NOT_FOUND', '缓存图片不存在');
+    if (!entry || (entry.deletedAt && !includeDeleted)) throw new ApiError(404, 'IMAGE_NOT_FOUND', '缓存图片不存在或已删除');
     if (Date.parse(entry.expiresAt) <= now) throw new ApiError(410, 'IMAGE_EXPIRED', '缓存图片已过期，请重新生成');
     return { ...entry, image: `/api/images/${entry.imageId}.png` };
   }
-  list() { return Object.values(this.store.read()).filter(e => Date.parse(e.expiresAt) > Date.now()).sort((a, b) => Date.parse(b.generatedAt) - Date.parse(a.generatedAt)).map(e => ({ ...e, image: `/api/images/${e.imageId}.png` })); }
+  list(deleted = false) { return Object.values(this.store.read()).filter(e => Boolean(e.deletedAt) === deleted && Date.parse(e.expiresAt) > Date.now()).sort((a, b) => Date.parse(b.generatedAt) - Date.parse(a.generatedAt)).map(e => ({ ...e, image: `/api/images/${e.imageId}.png` })); }
+  trash(id) {
+    return this.run(async () => { const entry = this.describe(id, Date.now(), true); await this.store.update(entries => { entries[entry.imageId].deletedAt ||= new Date().toISOString(); }); this.log.info('image_deleted', { imageId: entry.imageId }); return this.describe(id, Date.now(), true); });
+  }
+  restore(id) {
+    return this.run(async () => { const entry = this.describe(id, Date.now(), true); await this.filePath(entry.file); await this.store.update(entries => { delete entries[entry.imageId].deletedAt; }); this.log.info('image_restored', { imageId: entry.imageId }); return this.describe(id); });
+  }
   read(id) {
     return this.run(async () => { const entry = this.describe(id); const png = await fs.readFile(await this.filePath(entry.file)); if (pngHash(png) !== entry.pngHash) throw new ApiError(503, 'IMAGE_UNAVAILABLE', '图片校验失败，请重新生成'); return { ...entry, png }; });
   }

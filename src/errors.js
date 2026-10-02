@@ -8,5 +8,8 @@ export function number(value, name, min, max) { check(typeof value === 'number' 
 export function uuid(value) { check(typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value), 'internalUuid 必须为 UUID'); return value.toLowerCase(); }
 export function validateLocation(location) {
   check(location && typeof location === 'object', '需要天气地区');
-  return { name: boundedText(location.name, '地区名称', 32), latitude: number(location.latitude, '纬度', -90, 90), longitude: number(location.longitude, '经度', -180, 180) };
+  const result = { name: boundedText(location.name, '地区名称', 64), latitude: number(location.latitude, '纬度', -90, 90), longitude: number(location.longitude, '经度', -180, 180) };
+  for (const key of ['id', 'district', 'city', 'province']) if (location[key]) result[key] = boundedText(location[key], key, 64);
+  if (result.district && !result.name.includes(result.district)) result.name = boundedText(`${result.name} · ${result.district}`, '地区名称', 64);
+  return result;
 }

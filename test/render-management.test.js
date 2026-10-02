@@ -25,6 +25,15 @@ test('file profiles, editable layout, immutable image selection, expiry, and res
   assert.equal((await call('images')).status, 401);
   const login = await call('login', 'POST', { username: config.admin.username, password: config.admin.password }); cookie = login.headers.get('set-cookie').split(';')[0]; csrf = (await login.json()).data.csrfToken;
   assert.equal(system.registry.list().length, 0);
+  const direct = await call('render/profiles', 'POST', { id: 'direct-pixels', label: '直接指定像素', width: 640, height: 384, template: 'standard' });
+  assert.equal(direct.status, 201); const directProfile = (await direct.json()).data.profile;
+  assert.deepEqual(directProfile.canvas, { width: 640, height: 384 });
+  assert.ok(directProfile.layout.some(b => b.type === 'lunar'));
+  assert.equal((await call('render/profiles', 'POST', { id: 'direct-pixels', label: '重复', width: 640, height: 384, template: 'blank' })).status, 400);
+  assert.equal((await call('render/profiles', 'POST', { id: 'blank-pixels', label: '空白', width: 480, height: 800, template: 'blank' })).status, 201);
+  assert.deepEqual(config.render.profiles['blank-pixels'].canvas, { width: 480, height: 800 });
+  assert.equal((await call('render/profiles', 'POST', { id: 'bad-pixels', label: '错误', width: 10, height: 800, template: 'blank' })).status, 400);
+  assert.equal((await call('weather/lookup', 'POST', { query: '浦东新区' })).status, 400); // no production credentials
   const custom = { label: '横屏桌面', width: 800, height: 480, canvas: { width: 800, height: 480 }, layout: [{ id: 'greeting', type: 'text', x: 25, y: 25, width: 750, height: 420, fontSize: 40, enabled: true, text: '你好 {{date}}\n可编辑中文排版', bold: true }] };
   assert.equal((await call('render/profiles/my-desk', 'PUT', { profile: custom })).status, 200);
   assert.equal(YAML.parse(await fs.readFile(path.join(config.render.profileDir, 'my-desk.yaml'), 'utf8')).width, 800);
@@ -47,6 +56,17 @@ test('file profiles, editable layout, immutable image selection, expiry, and res
   const delivered = await system.commands.deliver(deviceUuid); assert.equal(delivered[0].payload.image, first.image); assert.equal(delivered[0].payload.imageId, first.imageId);
   assert.deepEqual((await system.display.get('REAL-DESK')).png, firstPng);
   const restored = await createApp(config); assert.equal(restored.registry.byUuid(deviceUuid).selectedImageId, first.imageId); assert.deepEqual((await restored.display.get('REAL-DESK')).png, firstPng); await restored.close();
+  assert.equal((await fetch(base + '/api/admin/images/' + first.imageId, { method: 'DELETE', headers: { cookie } })).status, 403);
+  assert.equal((await call('images/' + first.imageId, 'DELETE')).status, 200);
+  assert.equal((await fetch(base + first.image)).status, 404);
+  assert.ok(!system.images.list().some(i => i.imageId === first.imageId)); assert.ok(system.images.list(true).some(i => i.imageId === first.imageId));
+  assert.equal(system.registry.byUuid(deviceUuid).selectedImageId, null);
+  assert.ok((await system.commands.deliver(deviceUuid)).every(c => c.payload?.imageId !== first.imageId));
+  assert.notEqual((await system.display.get('REAL-DESK')).imageId, first.imageId);
+  const trashedRestart = await createApp(config); assert.ok(trashedRestart.images.list(true).some(i => i.imageId === first.imageId)); await assert.rejects(trashedRestart.images.read(first.imageId), { status: 404 }); await trashedRestart.close();
+  assert.equal((await call('images/' + first.imageId + '/restore', 'POST', {})).status, 200);
+  assert.deepEqual(Buffer.from(await (await fetch(base + first.image)).arrayBuffer()), firstPng);
+  assert.equal((await call(`device/${deviceUuid}/refresh`, 'POST', { imageId: first.imageId })).status, 200);
   const settings = await call('render', 'PUT', { retentionDays: 3, intervalSeconds: 600, enabled: true, adaptive: true, defaultProfile: 'my-desk' }); assert.equal(settings.status, 200);
   assert.equal(YAML.parse(await fs.readFile(configFile, 'utf8')).render.defaultProfile, 'my-desk');
   const keep = path.join(config.render.cacheDir, 'keep-me.png'); await fs.writeFile(keep, 'unrelated user file');

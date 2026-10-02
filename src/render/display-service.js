@@ -12,7 +12,7 @@ export class DisplayService {
   async init() { this.jobs = await new JsonStore(path.join(this.config.storage.dataDir, 'preview-jobs.json'), {}).init(); return this; }
   async previous(id) {
     const cached = this.cache.get(id);
-    if (cached && Date.parse(cached.expiresAt) > Date.now()) return cached;
+    if (cached && Date.parse(cached.expiresAt) > Date.now()) { try { this.images.describe(cached.imageId); return cached; } catch (e) { if (![404, 410].includes(e.status)) throw e; } }
     this.cache.delete(id);
     try {
       const meta = JSON.parse(await fs.readFile(path.join(this.config.render.cacheDir, `${id}.json`), 'utf8'));
@@ -55,7 +55,8 @@ export class DisplayService {
   }
   async generate(device, { force = false, source = 'automatic', previewContent = null } = {}) {
     const id = device.internalUuid;
-    const previous = device.preview ? this.cache.get(id) : await this.previous(id);
+    let previous = device.preview ? this.cache.get(id) : await this.previous(id);
+    if (previous) try { this.images.describe(previous.imageId); } catch (e) { if (![404, 410].includes(e.status)) throw e; previous = null; this.cache.delete(id); }
     let stage = 'input';
     try {
       const now = new Date(), weather = await this.weather.get(device.location);
@@ -64,7 +65,7 @@ export class DisplayService {
       const daily = weather.daily.filter(d => d.date >= almanac.date).slice(0, 4);
       const alerts = weather.alerts.filter(a => !a.expiresAt || Date.parse(a.expiresAt) > now.getTime());
       const content = previewContent ? [previewContent] : this.content && !device.preview ? this.content.active(id, now) : [];
-      const model = { device: { deviceId: device.deviceId || '', siteId: device.siteId, profile: device.profile, location: device.location, online: device.online, preview: Boolean(device.preview), showAqi: device.showAqi, showPressure: device.showPressure, showSunriseSunset: device.showSunriseSunset }, almanac, weather: { now: weather.now, hourly, daily, alerts, air: weather.air, source: weather.source, stale: weather.stale }, content, mode: device.displayMode || 'normal' };
+      const model = { device: { deviceId: device.deviceId || '', siteId: device.siteId, profile: device.profile, location: weather.location || device.location, online: device.online, preview: Boolean(device.preview), showAqi: device.showAqi, showPressure: device.showPressure, showSunriseSunset: device.showSunriseSunset }, almanac, weather: { now: weather.now, hourly, daily, alerts, air: weather.air, source: weather.source, stale: weather.stale }, content, mode: device.displayMode || 'normal' };
       if (model.mode === 'maintenance') model.maintenanceDevice = device;
       const profile = this.config.render.profiles[device.profile]; check(profile, '未知显示 profile');
       const dataHash = hash(JSON.stringify({ model, profile, renderer: this.renderer.signature }));
@@ -75,7 +76,7 @@ export class DisplayService {
       stage = 'render';
       const png = await this.renderer.render({ ...model, now: generatedAt, timezone: this.config.server.timezone, updatedTime: p.time, maintenanceDevice: device, serverUrl: this.config.server.baseUrl });
       stage = 'cache_write';
-      const current = await this.images.add({ revision, generatedAt, dataHash, internalUuid: device.preview ? null : id, deviceId: device.deviceId || null, profile: device.profile, width: profile.width, height: profile.height, location: device.location.name, source, mode: model.mode }, png);
+      const current = await this.images.add({ revision, generatedAt, dataHash, internalUuid: device.preview ? null : id, deviceId: device.deviceId || null, profile: device.profile, width: profile.width, height: profile.height, location: model.device.location.name, source, mode: model.mode }, png);
       if (!device.preview) await atomicWrite(path.join(this.config.render.cacheDir, `${id}.json`), JSON.stringify({ ...current, png: undefined }));
       this.cache.set(id, current); this.log.info('png_generated', { deviceId: device.deviceId || 'preview', profile: device.profile, revision, imageId: current.imageId }); return current;
     } catch (error) {
@@ -119,5 +120,6 @@ export class DisplayService {
     this.stopAndWait = async () => { this.stop(); while (running) await new Promise(r => setTimeout(r, 10)); };
   }
   invalidate(profile) { for (const d of this.registry.list()) if (!profile || d.profile === profile) this.schedule.delete(d.internalUuid); for (const p of Object.keys(this.jobs.read())) if (!profile || p === profile) this.schedule.delete(`preview-${p}`); }
+  forgetImage(imageId) { for (const [id, entry] of this.cache) if (entry.imageId === imageId) { this.cache.delete(id); this.schedule.delete(id); } }
   info() { return { retentionDays: this.config.render.retentionDays, generation: this.config.render.generation, defaultProfile: this.config.render.defaultProfile, profiles: this.config.render.profiles, weatherProvider: this.config.qweather.provider, location: this.config.location, devices: this.registry.list().map(d => ({ internalUuid: d.internalUuid, deviceId: d.deviceId, selectedImageId: d.selectedImageId || null, nextGenerationAt: this.schedule.get(d.internalUuid) || null })), jobs: Object.values(this.jobs.read()).map(j => ({ ...j, nextGenerationAt: this.schedule.get(`preview-${j.profile}`) || null })) }; }
 }

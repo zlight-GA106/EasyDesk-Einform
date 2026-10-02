@@ -1,5 +1,6 @@
 import { dateParts } from '../time.js';
 import { createHash } from 'node:crypto';
+import { validateLocation, boundedText } from '../errors.js';
 
 // Official v1 schemas and source links are recorded in docs/QWEATHER.md.
 export class QWeatherProvider {
@@ -13,7 +14,8 @@ export class QWeatherProvider {
     this.cacheKey = `qweather:${host}:${createHash('sha256').update(config.qweather.apiKey).digest('hex').slice(0, 16)}`;
   }
   async fetch(kind, location) {
-    const coordinates = `${location.latitude}/${location.longitude}`;
+    if (kind === 'geo') return (await this.lookup(`${location.longitude},${location.latitude}`, '', 1))[0] || {};
+    const coordinates = `${Number(location.latitude.toFixed(2))}/${Number(location.longitude.toFixed(2))}`;
     const routes = { now: `/weather/v1/current/${coordinates}`, hourly: `/weather/v1/hourly/${coordinates}`, daily: `/weather/v1/daily/${coordinates}`, air: `/airquality/v1/current/${coordinates}`, alerts: `/weatheralert/v1/current/${coordinates}` };
     if (!routes[kind]) throw new Error('Unsupported weather kind');
     const url = new URL(routes[kind], this.base);
@@ -24,6 +26,21 @@ export class QWeatherProvider {
     if (!response.ok) throw new Error(`QWeather HTTP ${response.status}`);
     return parseQWeather(kind, await response.json(), this.config);
   }
+  async lookup(query, adm = '', number = 10) {
+    const url = new URL('/geo/v2/city/lookup', this.base);
+    url.searchParams.set('location', boundedText(query, '区县名称 / 坐标', 100));
+    if (adm) url.searchParams.set('adm', boundedText(adm, '上级行政区', 64));
+    url.searchParams.set('number', String(number)); url.searchParams.set('lang', 'zh');
+    const response = await this.fetcher(url, { headers: { 'X-QW-Api-Key': this.config.qweather.apiKey }, signal: AbortSignal.timeout(this.config.qweather.timeoutMs), redirect: 'error' });
+    if (!response.ok) throw new Error(`QWeather Geo HTTP ${response.status}`);
+    return parseGeo(await response.json());
+  }
+}
+
+export function parseGeo(data) {
+  if (data?.code === '404') return [];
+  if (data?.code !== '200' || !Array.isArray(data.location)) throw new Error('Invalid QWeather Geo response');
+  return data.location.map(v => validateLocation({ name: [...new Set([v.adm2, v.name].filter(Boolean))].join(' · '), latitude: Number(v.lat), longitude: Number(v.lon), id: v.id, district: v.name, city: v.adm2, province: v.adm1 }));
 }
 
 const rounded = value => Number.isFinite(value) ? Math.round(value) : null;

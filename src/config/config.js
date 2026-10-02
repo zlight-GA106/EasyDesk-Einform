@@ -38,7 +38,7 @@ export async function loadConfig(file = process.env.EASYDESK_CONFIG || path.join
     [config.logging, 'retentionDays', 1, 365], [config.logging, 'maxFileBytes', 1024, 104857600], [config.logging, 'backups', 1, 10], [config.logging, 'recentLimit', 1, 1000]
   ];
   for (const [section, key, min, max] of ranges) if (!Number.isInteger(section[key]) || section[key] < min || section[key] > max) throw new Error(`${key} must be an integer from ${min} to ${max}`);
-  for (const key of ['now', 'hourly', 'daily', 'air', 'alerts']) if (!Number.isInteger(config.weather.ttlSeconds[key]) || config.weather.ttlSeconds[key] < 1) throw new Error(`weather.ttlSeconds.${key} must be a positive integer`);
+  for (const key of ['now', 'hourly', 'daily', 'air', 'alerts', 'geo']) if (!Number.isInteger(config.weather.ttlSeconds[key]) || config.weather.ttlSeconds[key] < 1) throw new Error(`weather.ttlSeconds.${key} must be a positive integer`);
   for (const key of ['enabled', 'adaptive']) if (typeof config.render.generation[key] !== 'boolean') throw new Error(`render.generation.${key} must be boolean`);
   config.render.profileDir = path.resolve(root, config.render.profileDir);
   config.render.inlineProfiles = config.render.profiles || {};

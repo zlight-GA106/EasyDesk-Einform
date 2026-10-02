@@ -29,6 +29,9 @@ export class CommandQueue {
       return state.commands.filter(c => c.internalUuid === internalUuid && c.status === 'pending').map(c => { c.attempts++; c.lastDeliveredAt = new Date().toISOString(); return { id: c.id, type: c.type, ...(c.payload ? { payload: c.payload } : {}) }; });
     });
   }
+  async cancelImage(imageId) {
+    await this.store.update(state => { for (const c of state.commands) if (c.status === 'pending' && c.payload?.imageId === imageId) { c.status = 'expired'; c.expiresAt = new Date().toISOString(); } });
+  }
   async ack(commandId, body) {
     const internalUuid = uuid(body?.internalUuid); this.registry.byUuid(internalUuid);
     check(['completed', 'failed'].includes(body.status), 'status 必须为 completed 或 failed');

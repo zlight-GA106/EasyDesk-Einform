@@ -1,7 +1,7 @@
 import { weatherIcon } from '../icons/weather.js';
 import { dateParts } from '../../time.js';
 
-const dimensions = { header: [765, 64, 30], date: [535, 278, 27], current: [207, 225, 30], almanac: [745, 110, 27], hourly: [761, 258, 27], daily: [543, 290, 25], details: [218, 290, 24], content: [761, 56, 22], status: [765, 50, 23] };
+const dimensions = { header: [765, 64, 30], date: [535, 278, 27], lunar: [207, 225, 48], current: [207, 225, 30], almanac: [745, 110, 27], hourly: [761, 258, 27], daily: [543, 290, 25], details: [218, 290, 24], content: [761, 56, 22], status: [765, 50, 23] };
 export function layoutTemplate(model, helpers, profile) {
   const { device: d, almanac: a, weather: w, timezone } = model;
   const value = v => v ?? '--';
@@ -22,14 +22,18 @@ export function layoutTemplate(model, helpers, profile) {
       svg += t(`${a.month}月${a.day}日`, 0, 203, 116, { bold: true, width: 530 });
       if (b.showWeekday !== false) svg += t(a.weekday, 6, 261, 43, { bold: true, width: 300 });
       if (b.showSolarTerm !== false && a.solarTerm) svg += t(a.solarTerm, 330, 260, 25, { width: 190 });
+    } else if (b.type === 'lunar') {
+      svg = t('农历', 104, 24, 24, { center: true, width: 200 }) + t(a.lunarMonth || '--月', 104, 90, 48, { center: true, bold: true, width: 200 }) + t(a.lunarDay || '--', 104, 154, 56, { center: true, bold: true, width: 200 }) + t(`${a.ganzhi} ${a.zodiac}`, 104, 207, 20, { center: true, width: 200 });
     } else if (b.type === 'current') {
       svg = weatherIcon(w.now.icon, 25, 9, 142) + t(`${w.now.text || '--'} ${value(w.now.temp)}℃`, 104, 167, 31, { center: true, width: 205 }) + t(d.location.name, 104, 210, 25, { center: true, width: 200 });
     } else if (b.type === 'almanac') {
       ['yi', 'ji'].forEach((key, i) => { const y = 29 + i * 57; svg += `<rect x="0" y="${y - 29}" width="44" height="39" rx="4" fill="#000"/>` + t(i ? '忌' : '宜', 8, y + 1, 27, { bold: true, color: '#fff', width: 35 }) + t(a[key]?.join('   ') || '--', 67, y, 27, { width: 675 }); });
     } else if (b.type === 'hourly') {
-      svg = line(0, 0, 761, 0) + t(b.text || '未来 5 小时天气', 8, 44, 29, { bold: true, width: 745 });
+      svg = line(0, 0, 761, 0) + t(b.text || '天气 · 未来 5 小时', 8, 39, 29, { bold: true, width: 745 });
+      const location = d.location.district ? d.location.name : `${d.location.name}（区县未解析）`;
+      svg += t(`${location} · ${w.now.text || '--'} ${value(w.now.temp)}℃`, 8, 76, 24, { width: 745 });
       const upcoming = w.hourly.filter(v => Date.parse(v.time) > Date.parse(model.now)).slice(0, 5);
-      for (let i = 0; i < 5; i++) { const hour = upcoming[i] || {}, x = 78 + i * 150; svg += t(hour.time ? `${Number(dateParts(new Date(hour.time), timezone).hour)}时` : '--时', x, 91, 27, { center: true, width: 130 }) + weatherIcon(hour.icon, x - 42, 115, 84) + t(`${value(hour.temp)}°`, x, 232, 30, { center: true, width: 140 }); }
+      for (let i = 0; i < 5; i++) { const hour = upcoming[i] || {}, x = 78 + i * 150; svg += t(hour.time ? `${Number(dateParts(new Date(hour.time), timezone).hour)}时` : '--时', x, 119, 27, { center: true, width: 130 }) + weatherIcon(hour.icon, x - 34, 139, 68) + t(`${value(hour.temp)}°`, x, 241, 30, { center: true, width: 140 }); }
     } else if (b.type === 'daily') {
       svg = line(0, 0, 543, 0) + t(b.text || '今日 · 未来天气', 8, 47, 29, { bold: true, width: 530 });
       const daily = w.daily.filter(v => v.date >= a.date).slice(0, 4);

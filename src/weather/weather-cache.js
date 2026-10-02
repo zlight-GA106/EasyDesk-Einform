@@ -31,12 +31,14 @@ export class WeatherCache {
   empty(kind) { return ['hourly', 'daily', 'alerts'].includes(kind) ? [] : {}; }
   async get(location) {
     const provider = this.provider;
-    const kinds = ['now', 'hourly', 'daily', 'air', 'alerts'];
+    const kinds = ['now', 'hourly', 'daily', 'air', 'alerts', ...(provider.lookup ? ['geo'] : [])];
     const values = await Promise.all(kinds.map(kind => this.entry(kind, location, provider)));
     const result = Object.fromEntries(kinds.map((kind, i) => [kind, values[i].data]));
     result.status = Object.fromEntries(kinds.map((kind, i) => [kind, { ...values[i], data: undefined }]));
     result.stale = values.some(v => v.stale);
     result.source = provider.source;
+    // A manually selected district retains its exact label; coordinate-only locations use GeoAPI.
+    result.location = location.district ? location : result.geo?.district ? { ...location, name: result.geo.name, district: result.geo.district, city: result.geo.city, province: result.geo.province, id: result.geo.id } : location;
     return result;
   }
 }

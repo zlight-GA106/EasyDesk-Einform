@@ -10,15 +10,21 @@
 
 独立预览通过「自动更新这份独立预览」加入持久化任务；没有预览任务与注册设备时不会凭空生成图片。后台列出下一次生成时间。手动再生成绕过内容签名复用，不会立即给客户端发刷新命令。
 
+缓存卡片的「删除」将图片移入预览回收站，立即从预览和设备取图接口移除，原到期时间前可恢复；到期后自动清理文件。选用该图的设备会恢复自动图片，未执行的引用该图的刷新命令会取消。恢复不会重新替设备选择图片。删除 PNG 不会暂停独立预览的自动生成计划。
+
 新增接口均遵守原管理员 session / CSRF：
 
 | 接口 | 用途 |
 | --- | --- |
 | GET /api/admin/images | 有效缓存元数据列表 |
+| DELETE /api/admin/images/:id | 删除预览并移入回收站 |
+| GET /api/admin/images/trash | 未过期的回收站条目 |
+| POST /api/admin/images/:id/restore | 恢复未过期的预览 |
 | POST /api/admin/images/generate | 以 `{ profile, location?, title?, body?, auto? }` 生成独立 PNG；或以 `{ internalUuid }` 重新生成设备 PNG |
 | GET /api/admin/render | 图片设置、Profiles、预览任务和下一次生成时间 |
 | PUT /api/admin/render | 保存 retentionDays、intervalSeconds、enabled、adaptive、defaultProfile |
 | GET /api/admin/render/profiles/:id | 读取 Profile 及 YAML |
+| POST /api/admin/render/profiles | 以 `{ id, label, width, height, template, from? }` 直接新建像素尺寸；template 为 standard / blank / copy |
 | PUT /api/admin/render/profiles/:id | 以 `{ profile }` 或 `{ yaml }` 创建 / 修改配置文件 |
 | POST /api/admin/render/profiles/reload | 校验并重载文件；拒绝移除正在使用的 Profile |
 | POST /api/admin/device/:uuid/refresh | `{ imageId: UUID }` 选择缓存并刷新；`{ imageId: auto }` 恢复自动图片 |
