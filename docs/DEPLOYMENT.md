@@ -44,3 +44,15 @@ docker compose restart server
 ```
 
 数据保存在 runtime。更新前备份 runtime 的 config 与 data 并保留当前镜像 ID；避免覆盖运行配置。当前没有接入 Android 实体终端，也没有进行多日压测或主机重启测试。
+
+## 2026-10-02 图片管理更新
+
+程序源码为 Git `e28a2553cee5308d1024d61ed8a74cb6a1625619`，运行镜像 ID 为 `sha256:b4da2a9f92ad513e83d152b5285445ea5f0a4ff26502734f373b3b3058fb8438`。更新后仍使用原项目目录、容器和 19900 端口，健康状态为 healthy，crash restart 为 0，生成 PNG 后实际内存约 181.3 MiB / 512 MiB。
+
+更新前逐一检查 35 个源码路径的旧版本哈希，备份本项目源码与 runtime 到 `backups/png-update-e28a255`，并将原工作镜像保留为 `easydesk-einform-server:before-png-e28a255`。新镜像先在独立配置、无网络、512 MiB / 1 核的测试容器内通过全部 11 项测试，再只更新本项目的 `server`。原管理员凭据、地区和服务器配置均已校验保留。
+
+旧内联 Profile 已迁移到 `runtime/config/profiles/*.yaml`，已有默认 Profile 保留。`z9` 和 `p78` 现在只是可编辑的配置文件名称，可以新增任意合法 ID 的 Profile；全新安装默认使用 `portrait`。未注册的历史预置设备已移除，实际设备注册前列表为空。历史 PNG 作为缓存保留至到期，不会注册为设备。
+
+工作站实际访问远端后台，确认图片预览入口、PNG 预览与缓存、内容与排版、Mock「仅测试」提示，以及侧边栏和顶栏旧状态文字移除。独立生成 PNG 验证为 825×1200、单通道 8 位灰阶，保存期限为三天，ETag 请求返回 304。只重启本项目容器后，原管理会话、PNG 缓存、Profile 文件和自动预览计划继续有效，设备列表仍为空。
+
+原有 21 个其他容器的 ID、Image、Names、State、Ports 与更新前一致，主机其他内容没有删除。更新前容器快照为 `releases/e28a255/pre-update-containers.json`，验收结果为 `png-update-e28a255-verification.json`，候选镜像测试记录为 `releases/e28a255/tests-passed.json`。
