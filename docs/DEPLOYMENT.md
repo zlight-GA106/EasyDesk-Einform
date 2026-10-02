@@ -59,7 +59,7 @@ docker compose restart server
 
 ## 2026-10-02 农历与区县更新
 
-功能提交为 `2c7310a`，窄屏修复提交及最终程序源码为 `75493c07e3301b8215d482e94d375a5a69d0dd93`。运行镜像 ID 为 `sha256:037fd4d2c9c7184a27d7b3622cf038b82a496e3eef04d8981d391a40c2dc2564`，健康状态 healthy、crash restart 为 0，重启及生成 PNG 后实际内存约 173.5 MiB / 512 MiB。
+功能提交为 `2c7310a`，窄屏修复提交为 `75493c0`，区县查询结果级别修正及最终程序源码为 `d182057559c80d12900cdbba33f8998ba81e00be`。运行镜像 ID 为 `sha256:294920c5a5b73271285844be160743fb2299b9d99891c2a9a057ce48a3985f83`，健康状态 healthy、crash restart 为 0，内存限制为 512 MiB。
 
 源码更新前校验全部项目文件哈希，新镜像在独立、无网络、512 MiB / 1 核测试容器内通过全部 14 项测试。仅替换 24 个本项目源码路径，并只更新 `server`。备份位于 `backups/lunar-district-75493c0`，原镜像保留为 `easydesk-einform-server:before-lunar-75493c0`。运行配置 `runtime/config/config.yaml` 的文件哈希更新前后相同，管理员凭据、天气源、默认地区、端口和生成规则均保留。
 
@@ -67,4 +67,4 @@ docker compose restart server
 
 工作站实际生成新 PNG，检查 825×1200、单通道 8 位灰阶、ETag 304，并确认农历布局。对这次新生成的图片执行删除，取图立即返回 404，列表移至回收站；只重启本项目后，管理员会话和回收站条目保留，恢复后的 PNG 字节与原图相同且 ETag 仍返回 304。没有注册远端测试设备，设备数量更新前后仍为 0。浏览器已登录远端新版工作台并检查图片完整加载。
 
-原有 21 个其他容器的 ID、Image、Names、State、Ports 与更新前一致。源码与候选测试记录位于 `releases/2c7310a`（内含最终 `75493c0` 的源码清单），运行验收记录为 `lunar-district-75493c0-verification.json`。服务器仍保留 Mock「仅测试」，和风天气 Host / Key 尚未提供；GeoAPI 区县查询、坐标反查与天气 v1 请求格式经过官方文档及离线接口测试，真实账户调用待配置凭据后验证。
+原有 21 个其他容器的 ID、Image、Names、State、Ports 与更新前一致。源码与候选测试记录位于 `releases/2c7310a`（内含最终 `d182057` 的源码清单），最终运行验收记录为 `lunar-district-d182057-verification.json`。区县级别修正更新前另外备份三个源码文件至 `backups/geo-district-d182057`，保留前一工作镜像为 `easydesk-einform-server:before-geo-d182057`。最终镜像再次通过全部 14 项独立容器测试，原运行配置哈希保持相同。服务器仍保留 Mock「仅测试」，和风天气 Host / Key 尚未提供；GeoAPI 区县查询、坐标反查与天气 v1 请求格式经过官方文档及离线接口测试，真实账户调用待配置凭据后验证。GeoAPI 城市级结果明确标注仅城市，不冒充区县。
