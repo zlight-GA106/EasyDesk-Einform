@@ -56,3 +56,15 @@ docker compose restart server
 工作站实际访问远端后台，确认图片预览入口、PNG 预览与缓存、内容与排版、Mock「仅测试」提示，以及侧边栏和顶栏旧状态文字移除。独立生成 PNG 验证为 825×1200、单通道 8 位灰阶，保存期限为三天，ETag 请求返回 304。只重启本项目容器后，原管理会话、PNG 缓存、Profile 文件和自动预览计划继续有效，设备列表仍为空。
 
 原有 21 个其他容器的 ID、Image、Names、State、Ports 与更新前一致，主机其他内容没有删除。更新前容器快照为 `releases/e28a255/pre-update-containers.json`，验收结果为 `png-update-e28a255-verification.json`，候选镜像测试记录为 `releases/e28a255/tests-passed.json`。
+
+## 2026-10-02 农历与区县更新
+
+功能提交为 `2c7310a`，窄屏修复提交及最终程序源码为 `75493c07e3301b8215d482e94d375a5a69d0dd93`。运行镜像 ID 为 `sha256:037fd4d2c9c7184a27d7b3622cf038b82a496e3eef04d8981d391a40c2dc2564`，健康状态 healthy、crash restart 为 0，重启及生成 PNG 后实际内存约 173.5 MiB / 512 MiB。
+
+源码更新前校验全部项目文件哈希，新镜像在独立、无网络、512 MiB / 1 核测试容器内通过全部 14 项测试。仅替换 24 个本项目源码路径，并只更新 `server`。备份位于 `backups/lunar-district-75493c0`，原镜像保留为 `easydesk-einform-server:before-lunar-75493c0`。运行配置 `runtime/config/config.yaml` 的文件哈希更新前后相同，管理员凭据、天气源、默认地区、端口和生成规则均保留。
+
+三个未修改过的标准排版文件 `p78.yaml`、`portrait.yaml`、`z9.yaml` 已迁移为大字号农历，天气栏目加入城市 / 区县和当前天气；输出宽高及名称保留。迁移脚本只更新与旧标准完全一致的排版，自定义文件不会覆盖。新 Profile 可直接创建任意合法宽高 px，预览支持删除至回收站并恢复。
+
+工作站实际生成新 PNG，检查 825×1200、单通道 8 位灰阶、ETag 304，并确认农历布局。对这次新生成的图片执行删除，取图立即返回 404，列表移至回收站；只重启本项目后，管理员会话和回收站条目保留，恢复后的 PNG 字节与原图相同且 ETag 仍返回 304。没有注册远端测试设备，设备数量更新前后仍为 0。浏览器已登录远端新版工作台并检查图片完整加载。
+
+原有 21 个其他容器的 ID、Image、Names、State、Ports 与更新前一致。源码与候选测试记录位于 `releases/2c7310a`（内含最终 `75493c0` 的源码清单），运行验收记录为 `lunar-district-75493c0-verification.json`。服务器仍保留 Mock「仅测试」，和风天气 Host / Key 尚未提供；GeoAPI 区县查询、坐标反查与天气 v1 请求格式经过官方文档及离线接口测试，真实账户调用待配置凭据后验证。
