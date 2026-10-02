@@ -1,0 +1,8 @@
+node_modules/
+config/config.yaml
+data/
+cache/
+logs/
+artifacts/
+*.tmp
+.env

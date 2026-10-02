@@ -1,0 +1,48 @@
+server:
+  host: 0.0.0.0
+  port: 8066
+  baseUrl: http://localhost:8066
+  timezone: Asia/Shanghai
+admin:
+  username: admin
+  password: change-me
+  sessionSecret: auto-generated-on-first-start
+  sessionHours: 12
+qweather:
+  provider: mock # mock | qweather
+  apiHost: ''
+  apiKey: ''
+  timeoutMs: 8000
+  airIndex: chn-mee
+location:
+  name: 上海
+  latitude: 31.23
+  longitude: 121.47
+weather:
+  ttlSeconds:
+    now: 1800
+    hourly: 1800
+    daily: 3600
+    air: 1800
+    alerts: 600
+  retrySeconds: 60
+render:
+  defaultProfile: z9
+  cacheDir: ./cache/render
+  fontRegular: ./assets/fonts/NotoSansCJKsc-Regular.otf
+  fontBold: ./assets/fonts/NotoSansCJKsc-Bold.otf
+  profiles:
+    z9: { width: 825, height: 1200 }
+    p78: { width: 758, height: 1024 }
+device:
+  heartbeatTimeoutSeconds: 180
+  lowBatteryThreshold: 15
+  refreshIntervalSeconds: 300
+  statusCheckSeconds: 30
+discovery:
+  enabled: true
+  serviceName: EasySmart-Core
+storage:
+  dataDir: ./data
+  cacheDir: ./cache
+  logDir: ./logs
