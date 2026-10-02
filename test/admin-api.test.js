@@ -1,0 +1,34 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import YAML from 'yaml';
+import { createApp } from '../src/app.js';
+import { loadConfig } from '../src/config/config.js';
+import { DEMO_UUID } from '../src/device/registry.js';
+
+test('admin login, CSRF, secret redaction, persisted content schedule and configuration', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'easydesk-admin-'));
+  const config = await loadConfig(); config.storage.dataDir = path.join(directory, 'data'); config.storage.cacheDir = path.join(directory, 'cache'); config.render.cacheDir = path.join(directory, 'render');
+  const file = path.join(directory, 'config.yaml'); await fs.writeFile(file, YAML.stringify(config));
+  const previousEnv = process.env.EASYDESK_CONFIG; process.env.EASYDESK_CONFIG = file;
+  const system = await createApp(config); const server = system.app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
+  t.after(async () => { if (previousEnv) process.env.EASYDESK_CONFIG = previousEnv; else delete process.env.EASYDESK_CONFIG; await new Promise(r => server.close(r)); await fs.rm(directory, { recursive: true, force: true }); });
+  const url = `http://127.0.0.1:${server.address().port}/api/admin/`; let cookie = ''; let csrf = '';
+  const call = (route, method = 'GET', body, headers = {}) => fetch(url + route, { method, headers: { 'Content-Type': 'application/json', Cookie: cookie, 'X-CSRF-Token': csrf, ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+  assert.equal((await call('devices')).status, 401);
+  assert.equal((await call('login', 'POST', { username: config.admin.username, password: 'incorrect' })).status, 401);
+  const login = await call('login', 'POST', { username: config.admin.username, password: config.admin.password }); assert.equal(login.status, 200);
+  cookie = login.headers.get('set-cookie').split(';')[0]; csrf = (await login.json()).data.csrfToken;
+  assert.equal((await call(`device/${DEMO_UUID}`, 'PUT', { siteId: 'TEST' }, { 'X-CSRF-Token': '' })).status, 403);
+  assert.equal((await call(`device/${DEMO_UUID}`, 'PUT', { internalUuid: 'changed' })).status, 400);
+  const weatherText = await (await call('weather')).text(); assert.ok(!weatherText.includes('sessionSecret')); assert.ok(!weatherText.includes('"apiKey":'));
+  const created = await call('custom-content', 'POST', { internalUuid: DEMO_UUID, title: '明早上课', body: '记得带 U 盘', priority: 5 }); assert.equal(created.status, 201);
+  const value = (await created.json()).data; assert.equal(system.content.active(DEMO_UUID)[0].body, '记得带 U 盘');
+  await call(`custom-content/${value.id}`, 'PUT', { ...value, startsAt: '2099-01-01T00:00:00Z' }); assert.equal(system.content.active(DEMO_UUID).length, 0);
+  assert.equal((await call(`custom-content/${value.id}`, 'DELETE')).status, 200);
+  assert.equal((await call('weather', 'PUT', { provider: 'mock', apiHost: '', location: { name: '杭州', latitude: 30.27, longitude: 120.15 } })).status, 200);
+  assert.equal(YAML.parse(await fs.readFile(file, 'utf8')).location.name, '杭州');
+  assert.equal((await call('logout', 'POST', {})).status, 200); assert.equal((await call('devices')).status, 401);
+});

@@ -5,6 +5,7 @@ import { WeatherCache } from './weather/weather-cache.js';
 import { Renderer } from './render/renderer.js';
 import { DisplayService } from './render/display-service.js';
 import { DeviceRegistry } from './device/registry.js';
+import { installAdmin } from './admin/routes.js';
 
 export async function createApp(config) {
   const log = { info: (event, fields) => console.log(JSON.stringify({ level: 'info', event, ...fields })), warn: (event, fields) => console.warn(JSON.stringify({ level: 'warn', event, ...fields })) };
@@ -33,11 +34,12 @@ export async function createApp(config) {
     const device = await registry.heartbeat(req.body, req.ip);
     res.json({ ok: true, deviceId: device.deviceId, siteId: device.siteId, refreshIntervalSeconds: device.refreshIntervalSeconds, lowBatteryThreshold: device.lowBatteryThreshold, image: `/api/display/${device.deviceId}.png`, commands: [] });
   });
+  const admin = await installAdmin(app, { registry, weather, display, log }, config);
   app.use((req, res) => res.status(404).json({ ok: false, error: { code: 'NOT_FOUND', message: '接口不存在' } }));
   app.use((error, req, res, next) => {
     const status = error.status || 500;
     if (status >= 500) log.warn('request_failed', { code: error.code || 'INTERNAL_ERROR' });
     res.status(status).json({ ok: false, error: { code: error.code || (status === 400 ? 'INVALID_INPUT' : 'INTERNAL_ERROR'), message: status >= 500 ? '服务器处理失败' : error.message } });
   });
-  return { app, weather, renderer, registry, display, log };
+  return { app, weather, renderer, registry, display, log, ...admin };
 }

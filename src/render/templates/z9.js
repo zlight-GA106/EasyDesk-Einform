@@ -56,7 +56,7 @@ export function z9Template(model, h) {
     if (d.showSunriseSunset !== false) { svg += t(`日出  ${daily[0]?.sunrise || '--:--'}`, 598, y, 23, { width: 182 }) + t(`日落  ${daily[0]?.sunset || '--:--'}`, 598, y + 38, 23, { width: 182 }); }
   }
   svg += line(32, 1082, 793, 1082);
-  if (content[0]) svg += t(`${content[0].title}  ${content[0].body}`, 40, 1121, 24, { width: 740 });
+  if (content[0]) svg += lines(`${content[0].title}  ${content[0].body}`, 40, 1106, 20, 740, 2);
   else svg += t(w.source === 'mock' ? '模拟天气 · 仅用于开发预览' : w.stale ? '天气缓存 · 部分数据更新失败' : '天气数据：和风天气 QWeather', 40, 1121, 22, { color: '#555' });
   svg += line(30, 1142, 795, 1142);
   svg += t(`更新 ${model.updatedTime}  |  ID: ${d.deviceId}  |  ${d.online ? '在线' : '离线'}`, 40, 1180, 23, { width: 690 });

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EasyDesk · Einform Server</title><link rel="stylesheet" href="/admin/style.css"><script type="module" src="/admin/app.js"></script></head>
+<body>
+  <div id="login" class="login-screen" hidden>
+    <div class="login-brand"><span class="brand-mark">E</span><span>EasyDesk<span class="brand-sub">EINFORM SERVER</span></span></div>
+    <form id="login-form" class="login-card"><span class="eyebrow">LOCAL INFORMATION INFRASTRUCTURE</span><h1>欢迎回来</h1><p>登录以管理你的电子墨水信息终端。</p><label>用户名<input name="username" autocomplete="username" value="admin" required></label><label>密码<input name="password" autocomplete="current-password" type="password" required></label><p id="login-error" role="alert"></p><button class="primary" type="submit">登录管理后台 <span>→</span></button><small>本地优先 · 局域网 / VPN 访问</small></form>
+  </div>
+  <div id="shell" class="shell" hidden>
+    <aside class="sidebar"><a class="brand" href="#devices"><span class="brand-mark">E</span><span>EasyDesk<span class="brand-sub">EINFORM SERVER</span></span></a><div class="nav-label">工作空间</div><nav id="nav"></nav><div class="sidebar-bottom"><div class="server-label"><span class="dot"></span>本地服务器<span>Local first · v0.1.0</span></div><button id="logout" class="logout">退出登录 <span>↗</span></button></div></aside>
+    <div class="workspace"><header class="topbar"><div>EasySmart <span>/</span> 信息终端管理</div><div class="top-right"><span class="connection"><span class="dot"></span>服务运行中</span><span id="admin-name"></span><span class="avatar">A</span></div></header><main id="main" aria-live="polite"></main><footer>EasyDesk Einform Server <span>服务器把信息印成纸，终端负责显示。</span></footer></div>
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body></html>
