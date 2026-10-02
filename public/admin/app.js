@@ -1,5 +1,5 @@
 const $ = selector => document.querySelector(selector);
-const main = $('#main'); let csrf = ''; let currentUser = ''; let pageVersion = 0;
+const main = $('#main'); let csrf = ''; let currentUser = ''; let pageVersion = 0; const commandHistory = new Map();
 const escape = value => String(value ?? '--').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const paths = {
   devices: '<rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8m-4-4v4M7 7h10M7 11h5"/>',
@@ -38,7 +38,10 @@ const panel = (title, body, aside = '') => `<section class="panel"><div class="p
 const field = (name, label, value, type = 'text', attributes = '') => `<label>${label}<input name="${name}" type="${type}" value="${escape(value ?? '')}" ${attributes}></label>`;
 const toggle = (name, label, value) => `<label class="toggle">${label}<input type="checkbox" name="${name}" ${value !== false ? 'checked' : ''}></label>`;
 const info = (label, value) => `<div class="info-row"><span>${label}</span><strong>${escape(value)}</strong></div>`;
-function controls(id) { return `<div class="controls">${[['refresh', '立即刷新', 'refresh'], ['force-redraw', '强制重绘', 'devices'], ['show-maintenance', '维护页面', 'system'], ['restart-app', '重启 APP', 'restart']].map(([command, label, symbol]) => `<button data-command="${command}" data-id="${id}">${icon(symbol)}${label}</button>`).join('')}</div>`; }
+function controls(id) {
+  const commands = commandHistory.get(id) || [];
+  return `<div class="controls">${[['refresh', '立即刷新', 'refresh'], ['force-redraw', '强制重绘', 'devices'], ['show-maintenance', '维护页面', 'system'], ['restart-app', '重启 APP', 'restart']].map(([command, label, symbol]) => `<button data-command="${command}" data-id="${id}">${icon(symbol)}${label}</button>`).join('')}</div><button style="margin-top:15px" data-command="return-home" data-id="${id}">返回主页</button>${commands.length ? `<div class="table-wrap" style="margin-top:20px"><table><thead><tr><th>命令</th><th>状态</th><th>下发次数</th></tr></thead><tbody>${commands.slice(-5).reverse().map(c => `<tr><td>${escape(c.type)}</td><td>${escape({ pending: '等待确认', completed: '已完成', failed: '执行失败', expired: '已过期' }[c.status])}</td><td>${c.attempts}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
+}
 
 async function devicesPage() {
   const [devices, system] = await Promise.all([api('devices'), api('system')]);
@@ -48,6 +51,7 @@ async function devicesPage() {
 }
 async function devicePage(id) {
   const [d, system] = await Promise.all([api(`device/${id}`), api('system')]);
+  commandHistory.set(id, d.commands || []);
   return `<a class="back" href="#devices">← 返回设备列表</a>` + pageHead(escape(d.deviceId), `${escape(d.siteId)} &nbsp; ${badge(d)}`, `<a href="/api/display/${encodeURIComponent(d.deviceId)}.png" target="_blank" rel="noopener"><button>查看 PNG ↗</button></a>`) + `<div class="detail-grid"><div>${panel('设备配置', `<form id="device-form" class="panel-body" data-id="${id}"><div class="form-grid">${field('deviceId', '设备 ID', d.deviceId, 'text', 'required maxlength="48"')}${field('siteId', '站点 ID', d.siteId, 'text', 'required maxlength="48"')}${field('locationName', '天气地区', d.location.name, 'text', 'required maxlength="32"')}<label>显示 Profile<select name="profile">${Object.keys(system.profiles).map(p => `<option ${d.profile === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>${field('latitude', '纬度', d.location.latitude, 'number', 'step="any" min="-90" max="90" required')}${field('longitude', '经度', d.location.longitude, 'number', 'step="any" min="-180" max="180" required')}${field('refreshIntervalSeconds', '刷新间隔 / 秒', d.refreshIntervalSeconds, 'number', 'min="30" max="86400" required')}${field('lowBatteryThreshold', '低电量阈值 / %', d.lowBatteryThreshold, 'number', 'min="0" max="100" required')}</div><div class="toggle-list">${toggle('showAqi', '显示空气质量 AQI', d.showAqi)}${toggle('showPressure', '显示气压', d.showPressure)}${toggle('showSunriseSunset', '显示日出日落', d.showSunriseSunset)}</div><div class="form-actions"><button class="primary">保存配置</button></div></form>`)}${panel('功能控制', `<div class="panel-body">${controls(id)}<p class="muted" style="margin-top:16px">命令将在设备下一次心跳时下发。</p></div>`)}${panel('设备信息', `<div class="panel-body">${info('Internal UUID', d.internalUuid)}${info('IP / MAC', `${d.ip || '--'} / ${d.mac || '--'}`)}${info('电量 / 信号', `${d.battery ?? '--'}% ${d.charging ? '充电中' : ''} / ${d.rssi ?? '--'} dBm`)}${info('版本', `App ${d.appVersion || '--'} / Android ${d.androidVersion || '--'}`)}${info('内容 Revision', d.contentRevision || '--')}${info('最后心跳', d.lastSeen || '--')}</div>`)}</div><div>${panel('屏幕预览', `<div class="preview"><img src="/api/display/${encodeURIComponent(d.deviceId)}.png" alt="${escape(d.deviceId)} 服务端渲染的电子墨水页面"><small>${system.profiles[d.profile].width} × ${system.profiles[d.profile].height} · 8-bit 灰阶 PNG</small></div>`)}</div></div>`;
 }
 async function contentPage(editId) {
@@ -75,7 +79,7 @@ main.addEventListener('click', async e => {
   try {
     if (button.dataset.action === 'reload') return render();
     button.disabled = true;
-    if (button.dataset.command) { await api(`device/${button.dataset.id}/${button.dataset.command}`, 'POST', {}); toast('命令已加入队列，将在下一次心跳时下发'); }
+    if (button.dataset.command) { await api(`device/${button.dataset.id}/${button.dataset.command}`, 'POST', {}); toast('命令已加入队列，将在下一次心跳时下发'); render(); }
     if (button.dataset.deleteContent) { await api(`custom-content/${button.dataset.deleteContent}`, 'DELETE'); toast('内容已删除'); render(); }
   } catch (error) { toast(error.message); } finally { button.disabled = false; }
 });

@@ -42,6 +42,10 @@ device:
 discovery:
   enabled: true
   serviceName: EasySmart-Core
+commands:
+  ttlSeconds: 86400
+  retentionSeconds: 604800
+  maxPendingPerDevice: 100
 storage:
   dataDir: ./data
   cacheDir: ./cache

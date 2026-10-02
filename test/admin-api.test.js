@@ -30,5 +30,18 @@ test('admin login, CSRF, secret redaction, persisted content schedule and config
   assert.equal((await call(`custom-content/${value.id}`, 'DELETE')).status, 200);
   assert.equal((await call('weather', 'PUT', { provider: 'mock', apiHost: '', location: { name: '杭州', latitude: 30.27, longitude: 120.15 } })).status, 200);
   assert.equal(YAML.parse(await fs.readFile(file, 'utf8')).location.name, '杭州');
+  const queued = await call(`device/${DEMO_UUID}/show-maintenance`, 'POST', {});
+  assert.equal(queued.status, 200); const command = (await queued.json()).data;
+  const heartbeat = () => fetch(url.replace('/api/admin/', '/api/device/heartbeat'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ internalUuid: DEMO_UUID }) });
+  assert.equal((await (await heartbeat()).json()).commands[0].id, command.id);
+  assert.equal((await (await heartbeat()).json()).commands[0].id, command.id);
+  assert.equal(system.registry.byUuid(DEMO_UUID).displayMode, 'maintenance');
+  const ack = body => fetch(url.replace('/api/admin/', `/api/device/command/${command.id}/ack`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await ack({ internalUuid: '11111111-1111-4111-8111-111111111111', status: 'completed' })).status, 404);
+  assert.equal((await ack({ internalUuid: DEMO_UUID, status: 'completed' })).status, 200);
+  assert.equal((await ack({ internalUuid: DEMO_UUID, status: 'completed' })).status, 200);
+  assert.equal((await (await heartbeat()).json()).commands.length, 0);
+  await assert.rejects(system.commands.enqueue(DEMO_UUID, 'exec'), { status: 400 });
+  await call(`device/${DEMO_UUID}/return-home`, 'POST', {}); assert.equal(system.registry.byUuid(DEMO_UUID).displayMode, 'normal');
   assert.equal((await call('logout', 'POST', {})).status, 200); assert.equal((await call('devices')).status, 401);
 });

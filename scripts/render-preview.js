@@ -17,4 +17,8 @@ await fs.mkdir(output, { recursive: true });
 await fs.writeFile(path.join(output, 'z9-normal.png'), await renderer.render(model));
 model.weather.alerts = [{ title: '暴雨橙色预警', sender: '上海中心气象台', publishedAt: now.toISOString() }];
 await fs.writeFile(path.join(output, 'z9-alert.png'), await renderer.render(model));
+model.mode = 'maintenance';
+model.maintenanceDevice = { ...model.device, battery: 83, charging: true, ip: '192.168.51.37', mac: '4C:72:B9:12:34:56', rssi: -47, androidVersion: '4.4.2', appVersion: '0.1.0', uptime: 184022, lastSeen: now.toISOString(), contentRevision: 'example-20261002' };
+model.serverUrl = 'http://192.168.51.10:8066';
+await fs.writeFile(path.join(output, 'z9-maintenance.png'), await renderer.render(model));
 console.log(`Previews: ${output}`);

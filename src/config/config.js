@@ -17,7 +17,9 @@ export async function loadConfig(file = process.env.EASYDESK_CONFIG || path.join
     raw = YAML.stringify(first);
     await atomicWrite(file, raw);
   }
-  const config = YAML.parse(raw);
+  const defaults = YAML.parse(await fs.readFile(path.join(root, 'config/config.example.yaml'), 'utf8'));
+  const merge = (a, b) => { for (const [key, value] of Object.entries(b)) { if (value && typeof value === 'object' && !Array.isArray(value)) a[key] = merge(a[key] || {}, value); else a[key] = value; } return a; };
+  const config = merge(defaults, YAML.parse(raw));
   if (!config.server || !Number.isInteger(config.server.port) || config.server.port < 1 || config.server.port > 65535) throw new Error('server.port must be 1–65535');
   new Intl.DateTimeFormat('zh-CN', { timeZone: config.server.timezone });
   if (!config.admin?.password || !config.admin?.sessionSecret || config.admin.sessionSecret.length < 24) throw new Error('Configure admin.password and a sessionSecret of at least 24 characters');

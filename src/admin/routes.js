@@ -6,14 +6,22 @@ import { ContentStore } from './content.js';
 import { Settings } from './settings.js';
 
 export async function installAdmin(app, system, config) {
-  const { registry, weather, display, log } = system;
+  const { registry, weather, display, commands, log } = system;
   const content = await new ContentStore(config, registry).init(); display.content = content;
   const settings = new Settings(config, weather, log);
   await installAuth(app, config, log);
   const ok = (res, data) => res.json({ ok: true, data });
   app.get('/api/admin/devices', (req, res) => ok(res, registry.list()));
-  app.get('/api/admin/device/:id', (req, res) => ok(res, registry.byUuid(req.params.id)));
-  app.put('/api/admin/device/:id', async (req, res) => ok(res, await registry.edit(req.params.id, req.body)));
+  app.get('/api/admin/device/:id', (req, res) => ok(res, { ...registry.byUuid(req.params.id), commands: commands.list(req.params.id) }));
+  app.put('/api/admin/device/:id', async (req, res) => { const device = await registry.edit(req.params.id, req.body); await commands.enqueue(device.internalUuid, 'reload_config'); ok(res, device); });
+  for (const [route, type] of Object.entries({ refresh: 'refresh', 'force-redraw': 'force_redraw', 'show-maintenance': 'show_maintenance', 'restart-app': 'restart_app', 'reload-config': 'reload_config' })) {
+    app.post(`/api/admin/device/:id/${route}`, async (req, res) => {
+      const command = await commands.enqueue(req.params.id, type);
+      if (type === 'show_maintenance') await registry.setMode(req.params.id, 'maintenance');
+      ok(res, command);
+    });
+  }
+  app.post('/api/admin/device/:id/return-home', async (req, res) => { await registry.setMode(req.params.id, 'normal'); ok(res, await commands.enqueue(req.params.id, 'refresh')); });
   app.get('/api/admin/weather', async (req, res) => ok(res, { ...settings.weatherInfo(), weather: await weather.get(config.location) }));
   app.put('/api/admin/weather', async (req, res) => ok(res, await settings.saveWeather(req.body)));
   app.get('/api/admin/system', (req, res) => ok(res, settings.systemInfo()));

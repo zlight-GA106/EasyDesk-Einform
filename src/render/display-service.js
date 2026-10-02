@@ -35,6 +35,7 @@ export class DisplayService {
       const alerts = weather.alerts.filter(a => !a.expiresAt || Date.parse(a.expiresAt) > now.getTime());
       const content = this.content ? this.content.active(device.internalUuid, now) : [];
       const model = { device: { deviceId: device.deviceId, siteId: device.siteId, profile: device.profile, location: device.location, online: device.online, showAqi: device.showAqi, showPressure: device.showPressure, showSunriseSunset: device.showSunriseSunset }, almanac, weather: { now: weather.now, hourly, daily, alerts, air: weather.air, source: weather.source, stale: weather.stale }, content, mode: device.displayMode || 'normal' };
+      if (model.mode === 'maintenance') model.maintenanceDevice = device;
       const dataHash = hash(JSON.stringify(model));
       if (previous?.dataHash === dataHash) return previous;
       const generatedAt = now.toISOString(); const p = dateParts(now, this.config.server.timezone);

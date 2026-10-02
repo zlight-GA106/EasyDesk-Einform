@@ -55,4 +55,5 @@ export class DeviceRegistry {
     });
     this.log.info('device_config_changed', { internalUuid: id }); return this.byUuid(id);
   }
+  async setMode(id, mode) { this.byUuid(id); await this.store.update(state => { state[id].displayMode = mode; }); }
 }
