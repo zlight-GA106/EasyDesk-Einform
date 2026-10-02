@@ -75,6 +75,7 @@ test('QWeather district lookup uses official GeoAPI, lat/lon precision and persi
   const district = { code: '200', location: [{ name: '浦东新区', adm2: '上海', adm1: '上海市', id: '101020600', lat: '31.23456', lon: '121.54321' }] };
   const provider = new QWeatherProvider(config, async (url, options) => { calls.push({ url, options }); if (offline) throw new Error('offline'); return { ok: true, json: async () => url.pathname.startsWith('/geo/') ? district : { condition: { code: '100', text: '晴' }, temperature: { value: 26 } } }; });
   const locations = await provider.lookup('浦东新区', '上海'); assert.equal(locations[0].name, '上海 · 浦东新区'); assert.equal(locations[0].district, '浦东新区');
+  assert.equal(parseGeo({ code: '200', location: [{ name: '上海市', adm2: '上海', lat: '31.23', lon: '121.47' }] })[0].district, undefined, 'city-level results must not be presented as a district');
   assert.equal(calls[0].url.pathname, '/geo/v2/city/lookup'); assert.equal(calls[0].url.searchParams.get('adm'), '上海'); assert.equal(calls[0].options.headers['X-QW-Api-Key'], 'test-key'); assert.ok(!calls[0].url.href.includes('test-key'));
   await provider.fetch('now', locations[0]); assert.equal(calls[1].url.pathname, '/weather/v1/current/31.23/121.54');
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'easydesk-geo-')); t.after(() => fs.rm(directory, { recursive: true, force: true })); config.storage.cacheDir = directory;

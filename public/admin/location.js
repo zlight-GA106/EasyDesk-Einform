@@ -5,7 +5,7 @@ export function createLocationPicker({ api, escape: esc }) {
     const picker = button.closest('[data-location-picker]'); if (!picker) return false;
     if (button.hasAttribute('data-geo-search')) {
       const results = await api('weather/lookup', 'POST', { query: picker.querySelector('[data-geo-query]').value, adm: picker.querySelector('[data-geo-adm]').value });
-      picker.querySelector('[data-geo-results]').innerHTML = results.length ? results.map(loc => `<button type="button" class="geo-result" data-geo-select="${esc(JSON.stringify(loc))}">${esc(loc.name)} · ${loc.latitude}, ${loc.longitude}</button>`).join('') : '<p class="muted">未找到地区，请补充所属城市或更换关键词。</p>';
+      picker.querySelector('[data-geo-results]').innerHTML = results.length ? results.map(loc => `<button type="button" class="geo-result" data-geo-select="${esc(JSON.stringify(loc))}">${esc(loc.name)} · ${loc.district ? '区县' : '仅城市，请继续查询区县'} · ${loc.latitude}, ${loc.longitude}</button>`).join('') : '<p class="muted">未找到地区，请补充所属城市或更换关键词。</p>';
       return true;
     }
     if (button.dataset.geoSelect) {

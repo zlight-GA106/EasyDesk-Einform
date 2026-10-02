@@ -40,7 +40,8 @@ export class QWeatherProvider {
 export function parseGeo(data) {
   if (data?.code === '404') return [];
   if (data?.code !== '200' || !Array.isArray(data.location)) throw new Error('Invalid QWeather Geo response');
-  return data.location.map(v => validateLocation({ name: [...new Set([v.adm2, v.name].filter(Boolean))].join(' · '), latitude: Number(v.lat), longitude: Number(v.lon), id: v.id, district: v.name, city: v.adm2, province: v.adm1 }));
+  const cityName = name => String(name || '').replace(/市$/, '');
+  return data.location.map(v => validateLocation({ name: [...new Set([v.adm2, v.name].filter(Boolean))].join(' · '), latitude: Number(v.lat), longitude: Number(v.lon), id: v.id, district: v.adm2 && cityName(v.name) !== cityName(v.adm2) ? v.name : undefined, city: v.adm2, province: v.adm1 }));
 }
 
 const rounded = value => Number.isFinite(value) ? Math.round(value) : null;
