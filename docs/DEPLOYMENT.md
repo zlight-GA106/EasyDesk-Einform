@@ -1,19 +1,19 @@
 # 部署记录
 
-2026-10-02（Asia/Shanghai）已完成 Linux Docker 部署与局域网验收。
+2026-10-02（Asia/Shanghai）首次完成 Linux Docker 部署与局域网验收。以下镜像与源码 ID 为首次部署记录；后续更新验收记录列于文末。
 
 | 项目 | 实际值 |
 | --- | --- |
 | 主机 / 用户 | 192.168.95.55 / zlight106 |
 | 项目目录 | /home/zlight106/easysmart199/easydesk-einform |
 | 管理后台 | http://192.168.95.55:19900/admin/ |
-| 预置设备 PNG | http://192.168.95.55:19900/api/display/Z9-001.png |
+| 图片预览入口 | http://192.168.95.55:19900/admin/#images |
 | 健康检查 | http://192.168.95.55:19900/api/health |
 | 容器 | easydesk-einform-server |
 | Compose 项目 | easydesk-einform |
 | 镜像标签 | easydesk-einform-server:0.1.0 |
-| 已部署程序源码 | Git bc241ed |
-| 镜像 ID | sha256:c2099aadff91079337ac2a84f94e682657009b4e1191ad233cb5b9ec2e59107a |
+| 首次部署程序源码 | Git bc241ed |
+| 首次部署镜像 ID | sha256:c2099aadff91079337ac2a84f94e682657009b4e1191ad233cb5b9ec2e59107a |
 | mDNS | EasySmart-Core，_easydesk._tcp.local，zlihome.local，port=19900，apiVersion=1 |
 | 天气源 | mock，PNG 明确标记模拟天气；真实天气待配置 QWeather Host / Key |
 

@@ -17,5 +17,7 @@ for (const name of ['config', 'data', 'cache', 'logs']) await fs.mkdir(path.join
 // Exclusive creation: repeated runs cannot overwrite an existing deployment configuration.
 await fs.writeFile(path.join(destination, 'config/config.yaml'), YAML.stringify(config), { flag: 'wx', mode: 0o600 });
 await fs.copyFile(path.join(root, 'config/config.example.yaml'), path.join(destination, 'config/config.example.yaml'), (await import('node:fs')).constants.COPYFILE_EXCL);
+await fs.mkdir(path.join(destination, 'config/profiles'), { recursive: true, mode: 0o750 });
+await fs.copyFile(path.join(root, 'config/profiles/portrait.yaml'), path.join(destination, 'config/profiles/portrait.yaml'), (await import('node:fs')).constants.COPYFILE_EXCL);
 await fs.writeFile(path.join(destination, 'admin-credentials.txt'), `EasyDesk Einform Server\nURL: ${url.origin}/admin\nUsername: ${config.admin.username}\nPassword: ${config.admin.password}\n`, { flag: 'wx', mode: 0o600 });
 console.log(`Docker runtime prepared at ${destination}. Credentials: admin-credentials.txt (not printed).`);

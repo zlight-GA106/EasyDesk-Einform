@@ -15,7 +15,8 @@ test('heartbeat, aliases, ETag, restart cache, and failed render recovery', asyn
   const url = `http://127.0.0.1:${server.address().port}`;
   const post = body => fetch(`${url}/api/device/heartbeat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal((await fetch(`${url}/api/display/missing.png`)).status, 404);
-  assert.equal((await post({ internalUuid: DEMO_UUID, battery: 12, charging: false })).status, 200);
+  assert.equal(system.registry.list().length, 0);
+  assert.equal((await post({ internalUuid: DEMO_UUID, deviceId: 'Z9-001', siteId: 'DESK-SH-001', battery: 12, charging: false })).status, 200);
   assert.equal(system.registry.byUuid(DEMO_UUID).lowBattery, true);
   const first = await fetch(`${url}/api/display/Z9-001.png`); assert.equal(first.status, 200);
   const etag = first.headers.get('etag'); await first.arrayBuffer();

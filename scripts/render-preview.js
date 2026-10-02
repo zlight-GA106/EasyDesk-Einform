@@ -12,7 +12,7 @@ const { renderer } = system;
 const now = new Date('2026-10-02T10:15:00+08:00');
 const mock = new MockWeatherProvider(config.server.timezone);
 const example = Object.fromEntries(await Promise.all(['now', 'hourly', 'daily', 'air', 'alerts'].map(async kind => [kind, await mock.fetch(kind, config.location, now)])));
-const model = { device: { deviceId: 'Z9-001', siteId: 'DESK-SH-001', location: config.location, profile: 'z9', online: false }, now: now.toISOString(), timezone: config.server.timezone, updatedTime: dateParts(now, config.server.timezone).time, almanac: getAlmanac(now, config.server.timezone), weather: { ...example, source: 'mock' } };
+const model = { device: { deviceId: 'PREVIEW', siteId: 'PREVIEW', location: config.location, profile: config.render.defaultProfile, preview: true, online: false }, now: now.toISOString(), timezone: config.server.timezone, updatedTime: dateParts(now, config.server.timezone).time, almanac: getAlmanac(now, config.server.timezone), weather: { ...example, source: 'mock' } };
 const output = path.join(root, 'artifacts');
 await fs.mkdir(output, { recursive: true });
 await fs.writeFile(path.join(output, 'z9-normal.png'), await renderer.render(model));

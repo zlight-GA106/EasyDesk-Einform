@@ -9,7 +9,14 @@ export class DeviceRegistry {
   defaults(internalUuid, deviceId, siteId) {
     return { internalUuid, deviceId, siteId, location: structuredClone(this.config.location), profile: this.config.render.defaultProfile, refreshIntervalSeconds: this.config.device.refreshIntervalSeconds, lowBatteryThreshold: this.config.device.lowBatteryThreshold, showAqi: true, showPressure: true, showSunriseSunset: true, lastSeen: null, createdAt: new Date().toISOString() };
   }
-  async init() { this.store = await new JsonStore(path.join(this.config.storage.dataDir, 'devices.json'), { [DEMO_UUID]: this.defaults(DEMO_UUID, 'Z9-001', 'DESK-SH-001') }).init(); return this; }
+  async init() {
+    this.store = await new JsonStore(path.join(this.config.storage.dataDir, 'devices.json'), {}).init();
+    const legacy = this.store.read()[DEMO_UUID];
+    if (legacy && !legacy.lastSeen && legacy.deviceId === 'Z9-001' && legacy.siteId === 'DESK-SH-001') {
+      await this.store.update(state => { delete state[DEMO_UUID]; }); this.log.info('unused_preview_device_removed');
+    }
+    return this;
+  }
   status(device) {
     const online = Boolean(device.lastSeen && Date.now() - Date.parse(device.lastSeen) <= this.config.device.heartbeatTimeoutSeconds * 1000);
     const lowBattery = typeof device.battery === 'number' && device.battery < device.lowBatteryThreshold;
@@ -32,6 +39,7 @@ export class DeviceRegistry {
         const deviceId = identifier(body.deviceId); const siteId = identifier(body.siteId || deviceId, 'siteId');
         if (Object.values(state).some(d => d.deviceId === deviceId)) throw new ApiError(409, 'DEVICE_ID_TAKEN', 'deviceId 已存在，请使用其他名称');
         state[id] = this.defaults(id, deviceId, siteId);
+        if (body.profile !== undefined) { check(Object.hasOwn(this.config.render.profiles, body.profile), '未知显示 profile'); state[id].profile = body.profile; }
       }
       cameOnline = !this.status(state[id]).online;
       // UUID owns administrator configuration; stale client aliases cannot undo edits.
@@ -51,9 +59,11 @@ export class DeviceRegistry {
     for (const key of ['showAqi', 'showPressure', 'showSunriseSunset']) if (body[key] !== undefined) { check(typeof body[key] === 'boolean', `${key} 必须是布尔值`); changes[key] = body[key]; }
     await this.store.update(state => {
       if (changes.deviceId && Object.values(state).some(d => d.internalUuid !== id && d.deviceId === changes.deviceId)) throw new ApiError(409, 'DEVICE_ID_TAKEN', 'deviceId 已存在');
+      if (changes.profile && changes.profile !== state[id].profile) state[id].selectedImageId = null;
       Object.assign(state[id], changes);
     });
     this.log.info('device_config_changed', { internalUuid: id }); return this.byUuid(id);
   }
   async setMode(id, mode) { this.byUuid(id); await this.store.update(state => { state[id].displayMode = mode; }); }
+  async selectImage(id, imageId) { this.byUuid(id); await this.store.update(state => { state[id].selectedImageId = imageId; }); }
 }

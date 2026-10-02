@@ -30,8 +30,10 @@ docker compose restart server
 
 ```sh
 curl http://127.0.0.1:19900/api/health
-curl -I http://127.0.0.1:19900/api/display/Z9-001.png
+curl -I http://127.0.0.1:19900/api/display/DEVICE_ID.png # 注册真实设备后替换 DEVICE_ID
 docker compose logs --tail=30 server
 ```
 
-管理页面在 `/admin`；预置 Z9-001 初始离线。真实天气在后台填 Host/Key 后切换 QWeather。`restart: unless-stopped` 使本服务随 Docker 启动恢复。
+管理页面在 `/admin`；没有预置设备，可先使用独立 PNG 预览。真实天气在后台填 Host/Key 后切换 QWeather，Mock 标注仅测试。`restart: unless-stopped` 使本服务随 Docker 启动恢复。
+
+Profile 文件挂载在 runtime/config/profiles。镜像自带只读 defaults，避免旧运行配置遮住新版默认值。首次升级图片管理功能时，备份 runtime/config 和 data 后执行 `node scripts/migrate-render-config.js /app/config`（在本项目镜像内挂载该运行目录），将内联 Profiles 转成 YAML 文件。既有凭据、地区与默认 Profile 保留。

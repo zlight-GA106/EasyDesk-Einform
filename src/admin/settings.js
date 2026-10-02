@@ -8,7 +8,7 @@ import { MockWeatherProvider } from '../weather/mock.js';
 import { QWeatherProvider } from '../weather/qweather.js';
 
 export class Settings {
-  constructor(config, weather, log) { Object.assign(this, { config, weather, log }); this.queue = Promise.resolve(); }
+  constructor(config, weather, log, display) { Object.assign(this, { config, weather, log, display }); this.queue = Promise.resolve(); }
   weatherInfo() { return { provider: this.config.qweather.provider, apiHost: this.config.qweather.apiHost, apiKeyConfigured: Boolean(this.config.qweather.apiKey), location: this.config.location }; }
   systemInfo() { return { name: 'EasyDesk Einform Server', version: '0.1.0', node: process.version, uptime: Math.floor(process.uptime()), server: this.config.server, device: this.config.device, profiles: this.config.render.profiles, discovery: this.config.discovery, adminUsername: this.config.admin.username }; }
   persist(mutator) {
@@ -36,5 +36,17 @@ export class Settings {
     for (const [key, min, max] of [['heartbeatTimeoutSeconds', 30, 86400], ['refreshIntervalSeconds', 30, 86400], ['lowBatteryThreshold', 0, 100]]) { device[key] = number(body?.[key], key, min, max); check(Number.isInteger(device[key]), '配置必须为整数'); }
     await this.persist(next => { next.device = device; }); this.config.device = device;
     this.log.info('system_config_changed'); return this.systemInfo();
+  }
+  async saveRender(body) {
+    check(body && Object.keys(body).every(k => ['retentionDays', 'intervalSeconds', 'enabled', 'adaptive', 'defaultProfile'].includes(k)), '图片设置字段无效');
+    const integer = (v, name, min, max) => { number(v, name, min, max); check(Number.isInteger(v), '配置必须为整数'); return v; };
+    const retentionDays = integer(body.retentionDays, '保存天数', 1, 30);
+    const intervalSeconds = integer(body.intervalSeconds, '生成间隔', 30, 86400);
+    for (const key of ['enabled', 'adaptive']) check(typeof body[key] === 'boolean', `${key} 必须为布尔值`);
+    check(Object.hasOwn(this.config.render.profiles, body.defaultProfile), '默认 profile 不存在');
+    const generation = { ...this.config.render.generation, intervalSeconds, enabled: body.enabled, adaptive: body.adaptive };
+    await this.persist(next => { next.render ||= {}; Object.assign(next.render, { retentionDays, generation, defaultProfile: body.defaultProfile }); });
+    Object.assign(this.config.render, { retentionDays, generation, defaultProfile: body.defaultProfile });
+    this.display.invalidate(); this.log.info('render_settings_changed'); return this.display.info();
   }
 }

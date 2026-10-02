@@ -14,8 +14,8 @@ npm start
 首次启动自动生成本地 `config/config.yaml` 和随机 sessionSecret。默认使用明确标记的 Mock 天气，无需互联网也能生成页面。
 
 - 管理后台：http://localhost:8066/admin
-- PNG：http://localhost:8066/api/display/Z9-001.png
-- Meta：http://localhost:8066/api/device/Z9-001/meta
+- 图片预览：登录后台后进入「图片预览」，无需设备
+- 设备 PNG / Meta：真实设备注册后使用它的 deviceId
 - 健康检查：http://localhost:8066/api/health
 - 首次登录：`admin` / `change-me`。请在本地 YAML 修改密码后重启。
 
@@ -42,7 +42,7 @@ Host 不含协议或路径。凭据仅保存在本地，不会回显给前端或
 
 ## 设备与命令
 
-首次运行预置 `Z9-001`，仅供 PNG 预览，初始为离线。它的固定 UUID 是 `00000000-0000-4000-8000-000000000001`。真实客户端生成并永久保存自己的 UUID；通过首次 heartbeat 自动注册不同 deviceId，例如 `Z9-002`。重复 deviceId 返回 409。
+首次运行不创建任何设备。真实客户端生成并永久保存自己的 UUID，通过首次 heartbeat 注册 deviceId / siteId，并可传入配置文件定义的 profile。重复 deviceId 返回 409。旧版从未收到心跳的预览设备会自动移除；已收到真实心跳的设备保留。
 
 管理员用 UUID 编辑设备；deviceId、siteId 可改名，UUID 不可修改。旧客户端上报的别名不会覆盖管理员配置，heartbeat 响应携带当前配置和显示地址。设备最后状态、充电、RSSI、版本、uptime、revision 均持久化；超时显示离线，低电量阈值在后台可单独配置。
 
@@ -54,9 +54,9 @@ Host 不含协议或路径。凭据仅保存在本地，不会回显给前端或
 
 默认 Z9 为 825 × 1200 竖屏、8 位单通道灰阶 PNG。白底黑字，固定 SVG 布局、简化天气图标。大日期、星期、本地农历 / 干支 / 生肖 / 节气 / 宜忌、5 小时预报、今天至大后天。右侧有有效预警时显示摘要，否则显示 AQI、气压、日出日落。文本按字体实际宽度截断或换行，不溢出。
 
-`p78` 当前复用第一版布局并按配置尺寸缩放；其他尺寸可在 `render.profiles` 添加。针对不同屏幕的专用排版可在模板目录扩展。
+显示 Profile 由 `config/profiles/*.yaml` 定义。尺寸、画布、组件位置、字号、显示开关和文本都可在后台编辑；Profile ID 来自文件名，支持任意有效名称。维护页采用统一布局。详见 [Profile 与排版](docs/PROFILES.md)。
 
-PNG 内容签名含日期、天气、设备显示配置、在线状态、当前内容、字体 / 模板签名和分辨率；普通 heartbeat 的非显示指标不会触发重绘。输入相同则不渲染，ETag 支持 If-None-Match / 304。先保存有效 PNG，再原子切换 metadata；失败返回旧 PNG，并设置 X-EasyDesk-Stale。设备命名 alias 为 `cache/render/Z9-001.png`，UUID 及内容哈希文件是真正缓存身份。
+PNG 内容签名含日期、天气、设备显示配置、在线状态、当前内容、字体 / 模板签名和分辨率；普通 heartbeat 的非显示指标不会触发重绘。输入相同则不渲染，ETag 支持 If-None-Match / 304。先保存有效 PNG，再原子切换 metadata；失败返回旧 PNG，并设置 X-EasyDesk-Stale。PNG 保存为 UUID 对象并建立持久化索引；默认保留三天，过期自动清理，仅处理本项目索引中的图片。可以生成独立预览或设备新 PNG，并从历史缓存选择下发到尺寸匹配的设备。手动选择会保留到图片过期，再恢复自动生成。详见 [图片缓存与自动生成](docs/IMAGES.md)。
 
 自定义内容支持标题、正文、起止时间和优先级。当前显示最高优先级的一条，在页脚两行内排版，超长部分截断；其余内容保留在后台。结束时间到达后自动退出显示。
 
@@ -68,14 +68,14 @@ src/
   config/       YAML 加载与校验
   almanac/      离线黄历
   weather/      Mock / QWeather / 分项缓存
-  render/       SVG / Sharp / 字体 / PNG 缓存 / templates
+  render/       SVG 组件排版 / Sharp / 字体 / 图片索引 / 自动生成
   device/       UUID 注册 / heartbeat / 命令队列
   admin/        session / 管理 API / 配置 / 定时内容
   discovery/    mDNS
   storage/      JSON 串行更新与临时文件 + fsync + rename
 public/admin/   原生 HTML / CSS / JavaScript 后台
 assets/fonts/   NotoSansCJKsc Regular / Bold 与许可证
-config/         示例配置（提交）与本地配置（忽略）
+config/         示例配置 / profiles（提交）与运行配置（忽略）
 data/           devices / custom-content / commands / sessions JSON
 cache/          weather.json 与 render 缓存
 logs/           按日 JSONL 日志，大小轮转与保留期限
@@ -97,6 +97,6 @@ npm test
 npm run preview
 ```
 
-测试覆盖：离线黄历和真实灰阶 PNG、官方 QWeather schema、缓存并发与 API 失败、heartbeat / UUID / ETag / 重启 / 渲染失败回退、session / CSRF / 凭据不回显、内容生效时间、命令重复投递与 ACK、JSON 并发与损坏保护、日志脱敏 / 轮转 / 离线事件。
+测试覆盖：配置文件排版、独立 PNG、历史缓存选择与过期清理、自适应生成、混排字体路径回归、离线黄历和真实灰阶 PNG、官方 QWeather schema、缓存并发与 API 失败、heartbeat / UUID / ETag / 重启 / 渲染失败回退、session / CSRF / 凭据不回显、内容生效时间、命令重复投递与 ACK、JSON 并发与损坏保护、日志脱敏 / 轮转 / 离线事件。
 
 `artifacts` 生成普通页、预警页、维护页预览。开发遵循 [五阶段计划](docs/PLAN.md)，每阶段运行后分别 Git 提交。详见 [客户端接口](docs/API.md) 与 [验收记录](docs/ACCEPTANCE.md)。

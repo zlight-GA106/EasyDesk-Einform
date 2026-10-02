@@ -5,8 +5,12 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --chown=node:node src ./src
 COPY --chown=node:node public ./public
+COPY --chown=node:node scripts ./scripts
 COPY --chown=node:node assets ./assets
 COPY --chown=node:node config/config.example.yaml ./config/config.example.yaml
+COPY --chown=node:node config/profiles ./config/profiles
+COPY config/config.example.yaml ./defaults/config.example.yaml
+COPY config/profiles/portrait.yaml ./defaults/profile.yaml
 USER node
 EXPOSE 19900
 CMD ["node", "src/server.js"]

@@ -10,8 +10,17 @@ import { Renderer } from '../src/render/renderer.js';
 import { WeatherCache } from '../src/weather/weather-cache.js';
 import { MockWeatherProvider } from '../src/weather/mock.js';
 import { parseQWeather } from '../src/weather/qweather.js';
+import { loadFonts, svgHelpers } from '../src/render/svg.js';
 
 const silent = { info() {}, warn() {} };
+test('mixed Chinese and Latin outlines remain finite and render the end of the line', async () => {
+  const h = svgHelpers(await loadFonts(await loadConfig()));
+  const paths = h.lines('测试内容  PNG 内容和排版均由服务器生成。', 8, 25, 20, 740, 2);
+  assert.ok(!paths.includes('NaN') && !paths.includes('Infinity'));
+  const png = await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="761" height="56"><rect width="761" height="56" fill="#fff"/>${paths}</svg>`)).png().toBuffer();
+  const right = await sharp(png).extract({ left: 250, top: 0, width: 200, height: 40 }).stats();
+  assert.ok(right.channels[0].min < 100, 'the latter Chinese text must contain visible ink');
+});
 test('offline almanac and real grayscale PNG for normal and alert layouts', async () => {
   const config = await loadConfig();
   const now = new Date('2026-10-02T10:15:00+08:00');
@@ -21,7 +30,7 @@ test('offline almanac and real grayscale PNG for normal and alert layouts', asyn
   const mock = new MockWeatherProvider(config.server.timezone);
   const weather = Object.fromEntries(await Promise.all(['now', 'hourly', 'daily', 'air', 'alerts'].map(async k => [k, await mock.fetch(k, config.location, now)])));
   const renderer = await new Renderer(config).init();
-  const model = { device: { deviceId: 'Z9-001', location: config.location, profile: 'z9' }, almanac, weather, now: now.toISOString(), timezone: config.server.timezone, updatedTime: '10:15' };
+  const model = { device: { deviceId: 'TEST-001', location: config.location, profile: config.render.defaultProfile }, almanac, weather, now: now.toISOString(), timezone: config.server.timezone, updatedTime: '10:15' };
   for (const alerts of [[], [{ title: '暴雨橙色预警'.repeat(10), sender: '上海中心气象台'.repeat(10) }]]) {
     model.weather.alerts = alerts;
     const meta = await sharp(await renderer.render(model)).metadata();

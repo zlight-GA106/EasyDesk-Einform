@@ -2,6 +2,19 @@ import fs from 'node:fs/promises';
 import opentype from 'opentype.js';
 
 let fontCache;
+// opentype.js 2.0.0's SVG decimal cache produces NaN for near-integer coordinates.
+// Serialize its finite outline commands directly instead of using toSVG rounding.
+function outlineSvg(path, color) {
+  const fields = { M: ['x', 'y'], L: ['x', 'y'], C: ['x1', 'y1', 'x2', 'y2', 'x', 'y'], Q: ['x1', 'y1', 'x', 'y'], Z: [] };
+  const data = path.commands.map(command => {
+    if (!Object.hasOwn(fields, command.type)) throw new Error('Unsupported font outline command');
+    return command.type + fields[command.type].map(key => {
+      const value = command[key]; if (!Number.isFinite(value)) throw new Error('Invalid font outline coordinate');
+      return String(Math.round(value * 100) / 100);
+    }).join(' ');
+  }).join(' ');
+  return `<path d="${data}" fill="${color}"/>`;
+}
 export async function loadFonts(config) {
   const files = [config.render.fontRegular, config.render.fontBold];
   const stamps = await Promise.all(files.map(async file => { const stat = await fs.stat(file); return `${file}:${stat.size}:${stat.mtimeMs}`; }));
@@ -28,8 +41,7 @@ export function svgHelpers(fonts) {
     const value = fit(s, size, width, bold);
     const left = center ? x - measure(value, size, bold) / 2 : x;
     const p = fonts[bold ? 'bold' : 'regular'].getPath(value, left, y, size);
-    p.fill = color;
-    return p.toSVG(2);
+    return outlineSvg(p, color);
   };
   const lines = (s, x, y, size, width, count, options = {}) => {
     const chunks = [];

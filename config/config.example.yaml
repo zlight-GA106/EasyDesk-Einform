@@ -29,13 +29,17 @@ weather:
     alerts: 600
   retrySeconds: 60
 render:
-  defaultProfile: z9
+  defaultProfile: portrait
+  profileDir: ./config/profiles
   cacheDir: ./cache/render
   fontRegular: ./assets/fonts/NotoSansCJKsc-Regular.otf
   fontBold: ./assets/fonts/NotoSansCJKsc-Bold.otf
-  profiles:
-    z9: { width: 825, height: 1200 }
-    p78: { width: 758, height: 1024 }
+  retentionDays: 3
+  generation:
+    enabled: true
+    intervalSeconds: 1800
+    adaptive: true
+    checkSeconds: 30
 device:
   heartbeatTimeoutSeconds: 180
   lowBatteryThreshold: 15

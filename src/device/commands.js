@@ -10,12 +10,14 @@ export class CommandQueue {
     for (const c of state.commands) if (c.status === 'pending' && Date.parse(c.expiresAt) <= now) c.status = 'expired';
     state.commands = state.commands.filter(c => c.status === 'pending' || now - Date.parse(c.acknowledgedAt || c.expiresAt) < this.config.commands.retentionSeconds * 1000);
   }
-  async enqueue(internalUuid, type) {
+  async enqueue(internalUuid, type, payload = null, expiresAt = null) {
     this.registry.byUuid(internalUuid); check(COMMAND_TYPES.includes(type), '不支持的命令类型');
     const command = await this.store.update(state => {
       this.cleanup(state, Date.now());
       if (state.commands.filter(c => c.internalUuid === internalUuid && c.status === 'pending').length >= this.config.commands.maxPendingPerDevice) throw new ApiError(409, 'QUEUE_FULL', '该设备待执行命令过多');
-      const value = { id: state.nextId++, internalUuid, type, status: 'pending', createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + this.config.commands.ttlSeconds * 1000).toISOString(), attempts: 0 };
+      const deadline = Math.min(Date.now() + this.config.commands.ttlSeconds * 1000, expiresAt ? Date.parse(expiresAt) : Infinity);
+      check(deadline > Date.now(), '命令引用的图片已过期');
+      const value = { id: state.nextId++, internalUuid, type, status: 'pending', createdAt: new Date().toISOString(), expiresAt: new Date(deadline).toISOString(), attempts: 0, ...(payload ? { payload } : {}) };
       state.commands.push(value); return value;
     }); this.log.info('device_command_queued', { internalUuid, type, id: command.id }); return command;
   }
@@ -24,7 +26,7 @@ export class CommandQueue {
     if (!pending) return [];
     return this.store.update(state => {
       this.cleanup(state, Date.now());
-      return state.commands.filter(c => c.internalUuid === internalUuid && c.status === 'pending').map(c => { c.attempts++; c.lastDeliveredAt = new Date().toISOString(); return { id: c.id, type: c.type }; });
+      return state.commands.filter(c => c.internalUuid === internalUuid && c.status === 'pending').map(c => { c.attempts++; c.lastDeliveredAt = new Date().toISOString(); return { id: c.id, type: c.type, ...(c.payload ? { payload: c.payload } : {}) }; });
     });
   }
   async ack(commandId, body) {
