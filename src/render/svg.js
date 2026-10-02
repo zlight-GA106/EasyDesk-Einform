@@ -1,9 +1,17 @@
 import fs from 'node:fs/promises';
 import opentype from 'opentype.js';
 
+let fontCache;
 export async function loadFonts(config) {
-  const read = async file => { const data = await fs.readFile(file); return opentype.parse(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)); };
-  return { regular: await read(config.render.fontRegular), bold: await read(config.render.fontBold) };
+  const files = [config.render.fontRegular, config.render.fontBold];
+  const stamps = await Promise.all(files.map(async file => { const stat = await fs.stat(file); return `${file}:${stat.size}:${stat.mtimeMs}`; }));
+  const key = stamps.join('|');
+  if (fontCache?.key === key) return fontCache.promise;
+  // Full CJK fonts contain tens of thousands of glyphs. Parse outlines lazily and share fonts.
+  const read = async file => { const data = await fs.readFile(file); return opentype.parse(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), { lowMemory: true }); };
+  const promise = (async () => ({ regular: await read(files[0]), bold: await read(files[1]) }))();
+  fontCache = { key, promise };
+  try { return await promise; } catch (error) { fontCache = undefined; throw error; }
 }
 
 export function svgHelpers(fonts) {
