@@ -1,0 +1,34 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { loadConfig } from '../src/config/config.js';
+import { createApp } from '../src/app.js';
+import { DEMO_UUID } from '../src/device/registry.js';
+
+test('heartbeat, aliases, ETag, restart cache, and failed render recovery', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'easydesk-api-')); const config = await loadConfig();
+  config.storage.dataDir = path.join(dir, 'data'); config.storage.cacheDir = path.join(dir, 'cache'); config.render.cacheDir = path.join(dir, 'render');
+  const system = await createApp(config); const server = system.app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
+  t.after(async () => { await new Promise(r => server.close(r)); await fs.rm(dir, { recursive: true, force: true }); });
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const post = body => fetch(`${url}/api/device/heartbeat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await fetch(`${url}/api/display/missing.png`)).status, 404);
+  assert.equal((await post({ internalUuid: DEMO_UUID, battery: 12, charging: false })).status, 200);
+  assert.equal(system.registry.byUuid(DEMO_UUID).lowBattery, true);
+  const first = await fetch(`${url}/api/display/Z9-001.png`); assert.equal(first.status, 200);
+  const etag = first.headers.get('etag'); await first.arrayBuffer();
+  assert.equal((await fetch(`${url}/api/display/Z9-001.png`, { headers: { 'If-None-Match': etag } })).status, 304);
+  const meta = await (await fetch(`${url}/api/device/Z9-001/meta`)).json();
+  const originalRender = system.renderer.render.bind(system.renderer);
+  system.renderer.render = () => { throw new Error('render should be skipped'); };
+  const restored = await createApp(config); restored.renderer.render = system.renderer.render;
+  assert.equal((await restored.display.get('Z9-001')).revision, meta.revision);
+  await system.registry.edit(DEMO_UUID, { siteId: 'CHANGED' }); assert.equal((await system.display.get('Z9-001')).fallback, true);
+  system.renderer.render = originalRender;
+  await system.registry.edit(DEMO_UUID, { deviceId: 'DESK-NEW' }); await post({ internalUuid: DEMO_UUID, deviceId: 'Z9-001' });
+  assert.equal(system.registry.byUuid(DEMO_UUID).deviceId, 'DESK-NEW');
+  assert.equal((await fetch(`${url}/api/display/Z9-001.png`)).status, 404);
+  assert.equal((await post({ internalUuid: DEMO_UUID, battery: 101 })).status, 400);
+});
