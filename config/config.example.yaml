@@ -8,12 +8,14 @@ admin:
   password: change-me
   sessionSecret: auto-generated-on-first-start
   sessionHours: 12
+  loginMaxAttempts: 10
+  loginWindowSeconds: 900
 qweather:
   provider: mock # mock | qweather
   apiHost: ''
   apiKey: ''
   timeoutMs: 8000
-  airIndex: chn-mee
+  airIndex: cn-mee
 location:
   name: 上海
   latitude: 31.23
@@ -50,3 +52,9 @@ storage:
   dataDir: ./data
   cacheDir: ./cache
   logDir: ./logs
+logging:
+  retentionDays: 14
+  maxFileBytes: 5242880
+  backups: 2
+  recentLimit: 200
+  console: true

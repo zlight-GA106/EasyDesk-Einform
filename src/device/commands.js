@@ -41,5 +41,5 @@ export class CommandQueue {
       this.log.info('device_command_ack', { id: c.id, internalUuid, status: c.status }); return { id: c.id, status: c.status };
     });
   }
-  list(internalUuid) { return this.store.read().commands.filter(c => c.internalUuid === internalUuid).slice(-30); }
+  list(internalUuid) { return this.store.read().commands.filter(c => c.internalUuid === internalUuid).slice(-30).map(c => c.status === 'pending' && Date.parse(c.expiresAt) <= Date.now() ? { ...c, status: 'expired' } : c); }
 }

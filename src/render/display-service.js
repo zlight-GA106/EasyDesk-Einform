@@ -27,6 +27,7 @@ export class DisplayService {
   }
   async generate(device) {
     const previous = await this.previous(device.internalUuid);
+    let stage = 'input';
     try {
       const now = new Date(); const weather = await this.weather.get(device.location);
       const almanac = getAlmanac(now, this.config.server.timezone, this.log);
@@ -36,13 +37,15 @@ export class DisplayService {
       const content = this.content ? this.content.active(device.internalUuid, now) : [];
       const model = { device: { deviceId: device.deviceId, siteId: device.siteId, profile: device.profile, location: device.location, online: device.online, showAqi: device.showAqi, showPressure: device.showPressure, showSunriseSunset: device.showSunriseSunset }, almanac, weather: { now: weather.now, hourly, daily, alerts, air: weather.air, source: weather.source, stale: weather.stale }, content, mode: device.displayMode || 'normal' };
       if (model.mode === 'maintenance') model.maintenanceDevice = device;
-      const dataHash = hash(JSON.stringify(model));
+      const dataHash = hash(JSON.stringify({ model, profile: this.config.render.profiles[device.profile], renderer: this.renderer.signature }));
       if (previous?.dataHash === dataHash) return previous;
       const generatedAt = now.toISOString(); const p = dateParts(now, this.config.server.timezone);
       const revision = `${p.date.replaceAll('-', '')}-${p.time.replace(':', '')}-${dataHash.slice(0, 12)}`;
+      stage = 'render';
       const png = await this.renderer.render({ ...model, now: generatedAt, timezone: this.config.server.timezone, updatedTime: p.time, maintenanceDevice: device, serverUrl: this.config.server.baseUrl });
       const pngHash = hash(png); const file = `${device.internalUuid}-${dataHash}.png`;
       const meta = { revision, generatedAt, dataHash, pngHash, etag: `"${pngHash}"`, file };
+      stage = 'cache_write';
       // Immutable PNG first, atomic metadata pointer second; crashes cannot mismatch image and revision.
       await atomicWrite(path.join(this.config.render.cacheDir, file), png);
       await atomicWrite(path.join(this.config.render.cacheDir, `${device.internalUuid}.json`), JSON.stringify(meta));
@@ -50,8 +53,8 @@ export class DisplayService {
       await atomicWrite(path.join(this.config.render.cacheDir, `${device.deviceId}.png`), png).catch(() => this.log.warn('render_alias_write_failed'));
       if (previous && previous.file !== file) await fs.rm(path.join(this.config.render.cacheDir, previous.file), { force: true }).catch(() => {});
       this.log.info('png_generated', { deviceId: device.deviceId, revision }); return current;
-    } catch {
-      this.log.warn('png_failed', { deviceId: device.deviceId, usingCache: Boolean(previous) });
+    } catch (error) {
+      this.log.warn('png_failed', { deviceId: device.deviceId, stage, errorCode: error.code || error.name, usingCache: Boolean(previous) });
       if (previous) return { ...previous, fallback: true };
       throw new ApiError(503, 'DISPLAY_UNAVAILABLE', '图片生成失败，尚无有效缓存');
     }

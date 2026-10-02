@@ -1,4 +1,5 @@
 import { dateParts } from '../time.js';
+import { createHash } from 'node:crypto';
 
 // Official v1 schemas and source links are recorded in docs/QWEATHER.md.
 export class QWeatherProvider {
@@ -9,6 +10,7 @@ export class QWeatherProvider {
     const host = config.qweather.apiHost;
     if (!/^[a-zA-Z0-9.-]+$/.test(host)) throw new Error('qweather.apiHost must be a hostname without scheme/path');
     this.base = `https://${host}`;
+    this.cacheKey = `qweather:${host}:${createHash('sha256').update(config.qweather.apiKey).digest('hex').slice(0, 16)}`;
   }
   async fetch(kind, location) {
     const coordinates = `${location.latitude}/${location.longitude}`;

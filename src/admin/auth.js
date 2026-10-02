@@ -20,8 +20,8 @@ export async function installAuth(app, config, log) {
   app.post('/api/admin/login', async (req, res) => {
     const now = Date.now();
     for (const [ip, attempt] of attempts) if (attempt.until < now) attempts.delete(ip);
-    const attempt = attempts.get(req.ip) || { count: 0, until: now + 900000 };
-    if (attempt.count >= 10) throw new ApiError(429, 'LOGIN_RATE_LIMIT', '登录尝试过多，请稍后再试');
+    const attempt = attempts.get(req.ip) || { count: 0, until: now + config.admin.loginWindowSeconds * 1000 };
+    if (attempt.count >= config.admin.loginMaxAttempts) throw new ApiError(429, 'LOGIN_RATE_LIMIT', '登录尝试过多，请稍后再试');
     check(typeof req.body?.username === 'string' && typeof req.body?.password === 'string', '请输入用户名和密码');
     if (!equal(req.body.username, config.admin.username) || !equal(req.body.password, config.admin.password)) {
       attempt.count++; attempts.set(req.ip, attempt); log.warn('admin_login_failed'); throw new ApiError(401, 'LOGIN_FAILED', '用户名或密码错误');
@@ -39,4 +39,5 @@ export async function installAuth(app, config, log) {
   });
   app.get('/api/admin/session', (req, res) => res.json({ ok: true, data: { username: req.session.user, csrfToken: req.session.csrf } }));
   app.post('/api/admin/logout', async (req, res) => { await new Promise((resolve, reject) => req.session.destroy(e => e ? reject(e) : resolve())); res.clearCookie('easydesk.sid'); res.json({ ok: true, data: null }); });
+  return store;
 }

@@ -7,9 +7,11 @@ import { DisplayService } from './render/display-service.js';
 import { DeviceRegistry } from './device/registry.js';
 import { installAdmin } from './admin/routes.js';
 import { CommandQueue } from './device/commands.js';
+import { Logger } from './logger.js';
+import { ApiError } from './errors.js';
 
 export async function createApp(config) {
-  const log = { info: (event, fields) => console.log(JSON.stringify({ level: 'info', event, ...fields })), warn: (event, fields) => console.warn(JSON.stringify({ level: 'warn', event, ...fields })) };
+  const log = await new Logger(config).init();
   const provider = config.qweather.provider === 'qweather' ? new QWeatherProvider(config) : new MockWeatherProvider(config.server.timezone);
   const weather = await new WeatherCache(config, provider, log).init();
   const renderer = await new Renderer(config).init();
@@ -18,6 +20,7 @@ export async function createApp(config) {
   const commands = await new CommandQueue(config, registry, log).init();
   const app = express();
   app.disable('x-powered-by');
+  app.use((req, res, next) => { res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'Content-Security-Policy': "default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'" }); next(); });
   app.use(express.json({ limit: '32kb' }));
   app.get('/api/health', (req, res) => res.json({ ok: true, data: { name: 'EasyDesk Einform Server', version: '0.1.0', weatherProvider: provider.source } }));
   app.get('/api/display/:deviceId.png', async (req, res) => {
@@ -42,7 +45,8 @@ export async function createApp(config) {
   app.use((error, req, res, next) => {
     const status = error.status || 500;
     if (status >= 500) log.warn('request_failed', { code: error.code || 'INTERNAL_ERROR' });
-    res.status(status).json({ ok: false, error: { code: error.code || (status === 400 ? 'INVALID_INPUT' : 'INTERNAL_ERROR'), message: status >= 500 ? '服务器处理失败' : error.message } });
+    res.status(status).json({ ok: false, error: { code: error.code || (status === 400 ? 'INVALID_INPUT' : 'INTERNAL_ERROR'), message: error instanceof ApiError ? error.message : status >= 500 ? '服务器处理失败' : error.type === 'entity.parse.failed' ? 'JSON 格式错误' : error.message } });
   });
-  return { app, weather, renderer, registry, display, commands, log, ...admin };
+  const close = async () => { await Promise.allSettled([...display.pending.values()]); await Promise.all([registry.store.queue, weather.store.queue, commands.store.queue, admin.content.store.queue, admin.sessions.store.queue]); await log.flush(); };
+  return { app, weather, renderer, registry, display, commands, log, close, ...admin };
 }

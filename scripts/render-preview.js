@@ -7,7 +7,8 @@ import { dateParts } from '../src/time.js';
 import { MockWeatherProvider } from '../src/weather/mock.js';
 
 const config = await loadConfig();
-const { renderer, weather } = await createApp(config);
+const system = await createApp(config);
+const { renderer } = system;
 const now = new Date('2026-10-02T10:15:00+08:00');
 const mock = new MockWeatherProvider(config.server.timezone);
 const example = Object.fromEntries(await Promise.all(['now', 'hourly', 'daily', 'air', 'alerts'].map(async kind => [kind, await mock.fetch(kind, config.location, now)])));
@@ -22,3 +23,4 @@ model.maintenanceDevice = { ...model.device, battery: 83, charging: true, ip: '1
 model.serverUrl = 'http://192.168.51.10:8066';
 await fs.writeFile(path.join(output, 'z9-maintenance.png'), await renderer.render(model));
 console.log(`Previews: ${output}`);
+await system.close();

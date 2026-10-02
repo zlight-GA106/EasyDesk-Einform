@@ -10,11 +10,11 @@ import { DEMO_UUID } from '../src/device/registry.js';
 
 test('admin login, CSRF, secret redaction, persisted content schedule and configuration', async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'easydesk-admin-'));
-  const config = await loadConfig(); config.storage.dataDir = path.join(directory, 'data'); config.storage.cacheDir = path.join(directory, 'cache'); config.render.cacheDir = path.join(directory, 'render');
+  const config = await loadConfig(); config.storage.dataDir = path.join(directory, 'data'); config.storage.cacheDir = path.join(directory, 'cache'); config.storage.logDir = path.join(directory, 'logs'); config.render.cacheDir = path.join(directory, 'render'); config.logging.console = false;
   const file = path.join(directory, 'config.yaml'); await fs.writeFile(file, YAML.stringify(config));
   const previousEnv = process.env.EASYDESK_CONFIG; process.env.EASYDESK_CONFIG = file;
   const system = await createApp(config); const server = system.app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
-  t.after(async () => { if (previousEnv) process.env.EASYDESK_CONFIG = previousEnv; else delete process.env.EASYDESK_CONFIG; await new Promise(r => server.close(r)); await fs.rm(directory, { recursive: true, force: true }); });
+  t.after(async () => { if (previousEnv) process.env.EASYDESK_CONFIG = previousEnv; else delete process.env.EASYDESK_CONFIG; await new Promise(r => server.close(r)); await system.close(); await fs.rm(directory, { recursive: true, force: true }); });
   const url = `http://127.0.0.1:${server.address().port}/api/admin/`; let cookie = ''; let csrf = '';
   const call = (route, method = 'GET', body, headers = {}) => fetch(url + route, { method, headers: { 'Content-Type': 'application/json', Cookie: cookie, 'X-CSRF-Token': csrf, ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
   assert.equal((await call('devices')).status, 401);

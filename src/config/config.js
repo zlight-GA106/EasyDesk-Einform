@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import YAML from 'yaml';
 import { atomicWrite } from '../storage/json-store.js';
+import { validateLocation } from '../errors.js';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export async function loadConfig(file = process.env.EASYDESK_CONFIG || path.join(root, 'config/config.yaml')) {
@@ -25,6 +26,20 @@ export async function loadConfig(file = process.env.EASYDESK_CONFIG || path.join
   if (!config.admin?.password || !config.admin?.sessionSecret || config.admin.sessionSecret.length < 24) throw new Error('Configure admin.password and a sessionSecret of at least 24 characters');
   if (!['mock', 'qweather'].includes(config.qweather?.provider)) throw new Error('qweather.provider must be mock or qweather');
   if (config.qweather.provider === 'qweather' && (!config.qweather.apiHost || !config.qweather.apiKey)) throw new Error('QWeather requires apiHost and apiKey');
+  const ranges = [
+    [config.admin, 'sessionHours', 1, 168], [config.admin, 'loginMaxAttempts', 1, 100], [config.admin, 'loginWindowSeconds', 30, 86400],
+    [config.device, 'heartbeatTimeoutSeconds', 30, 86400], [config.device, 'lowBatteryThreshold', 0, 100], [config.device, 'refreshIntervalSeconds', 30, 86400], [config.device, 'statusCheckSeconds', 1, 3600],
+    [config.qweather, 'timeoutMs', 100, 60000], [config.weather, 'retrySeconds', 1, 3600],
+    [config.commands, 'ttlSeconds', 30, 604800], [config.commands, 'retentionSeconds', 60, 2592000], [config.commands, 'maxPendingPerDevice', 1, 1000],
+    [config.logging, 'retentionDays', 1, 365], [config.logging, 'maxFileBytes', 1024, 104857600], [config.logging, 'backups', 1, 10], [config.logging, 'recentLimit', 1, 1000]
+  ];
+  for (const [section, key, min, max] of ranges) if (!Number.isInteger(section[key]) || section[key] < min || section[key] > max) throw new Error(`${key} must be an integer from ${min} to ${max}`);
+  for (const key of ['now', 'hourly', 'daily', 'air', 'alerts']) if (!Number.isInteger(config.weather.ttlSeconds[key]) || config.weather.ttlSeconds[key] < 1) throw new Error(`weather.ttlSeconds.${key} must be a positive integer`);
+  if (!config.render.profiles[config.render.defaultProfile]) throw new Error('render.defaultProfile does not exist in profiles');
+  if (typeof config.discovery.enabled !== 'boolean') throw new Error('discovery.enabled must be boolean');
+  config.location = validateLocation(config.location);
+  const baseUrl = new URL(config.server.baseUrl);
+  if (!['http:', 'https:'].includes(baseUrl.protocol) || baseUrl.username || baseUrl.password) throw new Error('server.baseUrl must be an HTTP URL without credentials');
   for (const key of ['fontRegular', 'fontBold']) {
     config.render[key] = path.resolve(root, config.render[key]);
     await fs.access(config.render[key]).catch(() => { throw new Error(`Missing configured Chinese font: ${config.render[key]}`); });

@@ -16,7 +16,10 @@ export async function atomicWrite(file, value) {
 export class JsonStore {
   constructor(file, initial) { this.file = file; this.initial = initial; this.queue = Promise.resolve(); }
   async init() {
-    try { this.value = JSON.parse(await fs.readFile(this.file, 'utf8')); }
+    try {
+      this.value = JSON.parse(await fs.readFile(this.file, 'utf8'));
+      if (!this.value || typeof this.value !== typeof this.initial || Array.isArray(this.value) !== Array.isArray(this.initial)) throw new Error('Unexpected JSON structure');
+    }
     catch (error) {
       if (error.code !== 'ENOENT') throw new Error(`Cannot read ${this.file}: ${error.message}`);
       this.value = structuredClone(this.initial);

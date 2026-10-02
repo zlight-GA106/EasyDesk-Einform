@@ -49,6 +49,10 @@ test('weather cache deduplicates calls and preserves persisted data on API failu
 test('QWeather v1 normalization follows official schema and rejects invalid data', async () => {
   const config = await loadConfig();
   assert.deepEqual(parseQWeather('air', { indexes: [{ code: 'qaqi', aqiDisplay: '0.9' }] }, config).aqi, null);
+  assert.equal(config.qweather.airIndex, 'cn-mee');
+  assert.equal(parseQWeather('air', { indexes: [{ code: 'cn-mee', aqiDisplay: '42', category: '优' }] }, config).aqi, '42');
+  assert.equal(parseQWeather('hourly', { hours: [{ forecastTime: '2026-10-02T03:00Z', condition: { code: '100', text: '晴' }, temperature: { value: 27.2 } }] }, config)[0].temp, 27);
+  assert.equal(parseQWeather('daily', { days: [{ forecastStartTime: '2026-10-01T22:00Z', daytime: { forecastStartTime: '2026-10-02T07:00+08:00', condition: { code: '101', text: '多云' } }, temperatureMin: { value: 24.3 }, temperatureMax: { value: 32.1 }, astro: { sunrise: '2026-10-02T06:01+08:00' } }] }, config)[0].sunrise, '06:01');
   assert.equal(parseQWeather('now', { condition: { text: '晴', code: '100' }, temperature: { value: 26.6 }, humidity: 0.69, pressure: { value: 1001.5 } }, config).humidity, 69);
   assert.throws(() => parseQWeather('now', {}, config));
   assert.deepEqual(parseQWeather('alerts', { alerts: [{ messageType: { code: 'cancel' } }] }, config), []);
