@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.easysmart.einform.checks">
+    <uses-sdk android:minSdkVersion="19" android:targetSdkVersion="19" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:label="Einform QA" />
+    <instrumentation android:name=".AgentChecks" android:targetPackage="com.easysmart.einform" android:label="API19 refresh checks" />
+    <instrumentation android:name=".LiveChecks" android:targetPackage="com.easysmart.einform" android:label="Actual server protocol checks" />
+</manifest>

@@ -7,3 +7,7 @@ artifacts/
 runtime/
 *.tmp
 .env
+agent/build/
+agent/dist/
+agent/local.properties
+agent/signing/
