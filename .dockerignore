@@ -1,0 +1,10 @@
+.git
+node_modules
+config/config.yaml
+runtime
+data
+cache
+logs
+artifacts
+.env
+*.tmp

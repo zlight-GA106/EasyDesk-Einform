@@ -86,6 +86,8 @@ test/           必要核心和接口测试
 
 Ctrl+C / SIGTERM 停止接收请求，撤销 mDNS，等待正在进行的显示、JSON 和日志写入。作为常驻基础设施，可通过操作系统的服务管理器启动 `node src/server.js`，设置工作目录为项目目录，并在异常退出后重启。没有自动安装系统服务。
 
+需要使用 Docker 在 19900 端口部署时，见 [Docker 运行说明](docs/DOCKER.md)。
+
 备份 `config/config.yaml` 和 `data`；cache 可重建。JSON 损坏时启动明确报错并保留原文件，修复或恢复备份后重启。无法渲染且没有上一张有效 PNG 时返回明确 503。
 
 ## 验证

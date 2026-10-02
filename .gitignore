@@ -4,5 +4,6 @@ data/
 cache/
 logs/
 artifacts/
+runtime/
 *.tmp
 .env

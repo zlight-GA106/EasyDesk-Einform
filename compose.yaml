@@ -1,0 +1,36 @@
+name: easydesk-einform
+services:
+  server:
+    image: easydesk-einform-server:0.1.0
+    build: .
+    container_name: easydesk-einform-server
+    # mDNS must advertise the LAN address and the real service port.
+    network_mode: host
+    user: "${EASYDESK_UID:-1000}:${EASYDESK_GID:-1000}"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    cpus: 1.0
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    environment:
+      NODE_ENV: production
+      EASYDESK_HEALTH_PORT: "19900"
+    volumes:
+      - ./runtime/config:/app/config
+      - ./runtime/data:/app/data
+      - ./runtime/cache:/app/cache
+      - ./runtime/logs:/app/logs
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:'+process.env.EASYDESK_HEALTH_PORT+'/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
