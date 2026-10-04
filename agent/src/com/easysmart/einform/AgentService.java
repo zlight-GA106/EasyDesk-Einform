@@ -31,6 +31,7 @@ public final class AgentService extends Service {
     public interface Listener {
         void image(Image image, boolean refresh);
         void status(String message, boolean failure, String detail);
+        void timing(long displayedAt, long nextRefreshAt);
     }
     public static final class Image {
         final long id;
@@ -54,6 +55,7 @@ public final class AgentService extends Service {
     private ImageCache cache;
     private Bitmap cachedBitmap;
     private long serial, nextMeta;
+    private long displayedAt, nextRefreshAt; // Main thread owns the displayed timestamp.
     private int width, height, interval = 300, failures;
     private String message = "等待连接", activeIdentity = "";
     private boolean messageFailure;
@@ -81,6 +83,7 @@ public final class AgentService extends Service {
         if (pending != null) listener.image(pending, true);
         else if (displayed != null) listener.image(displayed, false);
         listener.status(message, messageFailure, errorDetail);
+        listener.timing(displayedAt, nextRefreshAt);
     }
     void detach(Listener value) { if (listener == value) listener = null; }
     void restored(Image image) {
@@ -93,7 +96,9 @@ public final class AgentService extends Service {
     }
     void finish(final Image image) {
         if (pending != image) return;
-        new AppConfig(this).preferences.edit().putString("displayedRevision:" + activeIdentity, image.revision).commit();
+        displayedAt = System.currentTimeMillis();
+        new AppConfig(this).preferences.edit().putString("displayedRevision:" + activeIdentity, image.revision)
+            .putLong("displayedAt:" + activeIdentity, displayedAt).commit();
         Image old = displayed; displayed = pending; pending = null;
         if (old != null && old.bitmap != image.bitmap) old.bitmap.recycle();
         worker.post(new Runnable() {
@@ -101,6 +106,7 @@ public final class AgentService extends Service {
                 for (Long id : image.commands) mark(id, "completed");
                 rendering = false;
                 nextMeta = SystemClock.elapsedRealtime() + interval * 1000L;
+                schedule();
                 if (!image.commands.isEmpty()) {
                     worker.removeCallbacks(periodic); worker.post(periodic); // ACK only after the painted page + short tone
                 }
@@ -136,7 +142,11 @@ public final class AgentService extends Service {
         config = new AppConfig(this);
         if (cache != null && activeIdentity.equals(config.identity())) return;
         activeIdentity = config.identity(); rendering = false; nextMeta = 0;
-        main.post(new Runnable() { public void run() { pending = null; } });
+        final long savedTime = config.preferences.getLong("displayedAt:" + activeIdentity, 0);
+        main.post(new Runnable() { public void run() {
+            pending = null; displayedAt = savedTime; nextRefreshAt = 0;
+            if (listener != null) listener.timing(displayedAt, nextRefreshAt);
+        } });
         acknowledgements.clear(); completed.clear();
         JSONObject saved = new JSONObject(config.preferences.getString("completed:" + activeIdentity, "{}"));
         JSONArray names = saved.names();
@@ -255,12 +265,23 @@ public final class AgentService extends Service {
             status(cachedBitmap == null ? "连接 / 图片失败 · 等待有效图片" : "连接 / 图片失败 · 已保留上一页", true, exception.toString());
             if (forceRequested && cachedBitmap != null && !rendering) offer(cachedBitmap, cache.revision, new ArrayList<Long>(), true);
         } finally {
-            if (!destroyed) {
-                worker.removeCallbacks(periodic);
-                int delay = failures == 0 ? 60 : Math.min(300, 15 * (1 << Math.min(4, failures - 1)));
-                worker.postDelayed(periodic, delay * 1000L);
-            }
+            schedule();
         }
+    }
+    private void schedule() {
+        if (destroyed) return;
+        long remaining = Math.max(0, nextMeta - SystemClock.elapsedRealtime());
+        long delay = failures == 0 ? (remaining > 0 ? Math.min(60000L, remaining) : 60000L)
+            : Math.min(300, 15 * (1 << Math.min(4, failures - 1))) * 1000L;
+        final long next = config == null || !config.configured ? 0
+            : System.currentTimeMillis() + (failures == 0 ? remaining : delay);
+        main.post(new Runnable() { public void run() {
+            if (destroyed) return;
+            nextRefreshAt = next;
+            if (listener != null) listener.timing(displayedAt, nextRefreshAt);
+        } });
+        worker.removeCallbacks(periodic);
+        worker.postDelayed(periodic, Math.max(1000L, delay));
     }
     public void onDestroy() {
         destroyed = true; listener = null;

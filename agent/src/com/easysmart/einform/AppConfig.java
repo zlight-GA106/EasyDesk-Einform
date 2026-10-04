@@ -6,7 +6,7 @@ import java.net.URI;
 import java.util.UUID;
 
 final class AppConfig {
-    static final String VERSION = "0.1.1-z9";
+    static final String VERSION = "0.1.2-z9";
     final SharedPreferences preferences;
     final String server, uuid, deviceId, siteId, profile;
     final boolean configured, sound, deep, clean;

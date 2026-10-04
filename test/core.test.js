@@ -35,9 +35,11 @@ test('offline almanac and real grayscale PNG for normal and alert layouts', asyn
   const model = { device: { deviceId: 'TEST-001', location: config.location, profile: config.render.defaultProfile }, almanac, weather, now: now.toISOString(), timezone: config.server.timezone, updatedTime: '10:15' };
   for (const alerts of [[], [{ title: '暴雨橙色预警'.repeat(10), sender: '上海中心气象台'.repeat(10) }]]) {
     model.weather.alerts = alerts;
-    const meta = await sharp(await renderer.render(model)).metadata();
+    const png = await renderer.render(model), meta = await sharp(png).metadata();
     assert.equal(meta.width, 825); assert.equal(meta.height, 1200);
     assert.equal(meta.channels, 1); assert.equal(meta.bitsPerSample, 8);
+    const footer = await sharp(await sharp(png).extract({ left: 0, top: 1110, width: 825, height: 90 }).toBuffer()).stats();
+    assert.equal(footer.channels[0].min, 255, 'the native app footer must have a blank PNG region');
   }
 });
 

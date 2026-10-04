@@ -113,8 +113,10 @@ public final class MainActivity extends Activity implements AgentService.Listene
         else if (!failure) failureSounded = false;
     }
     private void updateDiagnostics() {
+        // Read hardware statistics only while the waiting page is visible.
         if (screen.waiting()) screen.diagnostics(DeviceDiagnostics.collect(this) + "\nStatus: " + debugStatus + "\nLast error: " + debugError);
     }
+    public void timing(long displayedAt, long nextRefreshAt) { screen.timing(displayedAt, nextRefreshAt); }
     private void beep(int millis, boolean error) {
         if (!new AppConfig(this).sound || tone == null) return;
         try {

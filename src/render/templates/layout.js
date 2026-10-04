@@ -1,7 +1,7 @@
 import { weatherIcon } from '../icons/weather.js';
 import { dateParts } from '../../time.js';
 
-const dimensions = { header: [765, 64, 30], date: [535, 278, 27], lunar: [207, 225, 48], current: [207, 225, 30], almanac: [745, 110, 27], hourly: [761, 258, 27], daily: [543, 290, 25], details: [218, 290, 24], content: [761, 56, 22], status: [765, 50, 23] };
+const dimensions = { header: [765, 64, 16], date: [535, 278, 27], lunar: [240, 320, 64], current: [207, 225, 30], almanac: [745, 110, 27], hourly: [761, 258, 27], daily: [543, 290, 25], details: [218, 290, 24], content: [761, 56, 22], status: [765, 50, 23] };
 export function layoutTemplate(model, helpers, profile) {
   const { device: d, almanac: a, weather: w, timezone } = model;
   const value = v => v ?? '--';
@@ -14,7 +14,7 @@ export function layoutTemplate(model, helpers, profile) {
     const lines = (s, x, y, size, available, count, options) => helpers.lines(s, x, y, size * scale, available, count, options);
     const line = helpers.line; let svg = '';
     if (b.type === 'header') {
-      svg = t(b.text ?? 'EasyDesk Einform', 8, 37, 30, { bold: true, width: 560 }) + t(b.subtitle ?? 'EASYSMART', 690, 35, 19, { center: true, width: 138 }) + line(0, 62, 765, 62);
+      svg = t(b.text ?? 'EasyDesk Einform', 8, 29, 16, { bold: true, width: 560 }) + t(b.subtitle ?? '', 690, 29, 16, { center: true, width: 138 }) + line(0, 62, 765, 62);
     } else if (b.type === 'date') {
       svg = t(`${a.year}年${a.month}月${a.day}日  ${a.weekday}`, 4, 26, 27, { width: 525 });
       const small = [b.showLunar !== false ? a.lunar : '', b.showGanzhi !== false ? `${a.ganzhi}  ${a.zodiac}` : ''].filter(Boolean).join('   ');
@@ -23,7 +23,7 @@ export function layoutTemplate(model, helpers, profile) {
       if (b.showWeekday !== false) svg += t(a.weekday, 6, 261, 43, { bold: true, width: 300 });
       if (b.showSolarTerm !== false && a.solarTerm) svg += t(a.solarTerm, 330, 260, 25, { width: 190 });
     } else if (b.type === 'lunar') {
-      svg = t('农历', 104, 24, 24, { center: true, width: 200 }) + t(a.lunarMonth || '--月', 104, 90, 48, { center: true, bold: true, width: 200 }) + t(a.lunarDay || '--', 104, 154, 56, { center: true, bold: true, width: 200 }) + t(`${a.ganzhi} ${a.zodiac}`, 104, 207, 20, { center: true, width: 200 });
+      svg = t('农历', 120, 34, 26, { center: true, width: 232 }) + t(a.lunarMonth || '--月', 120, 130, 76, { center: true, bold: true, width: 232 }) + t(a.lunarDay || '--', 120, 231, 90, { center: true, bold: true, width: 232 }) + t(`${a.ganzhi} ${a.zodiac}`, 120, 293, 24, { center: true, width: 232 });
     } else if (b.type === 'current') {
       svg = weatherIcon(w.now.icon, 25, 9, 142) + t(`${w.now.text || '--'} ${value(w.now.temp)}℃`, 104, 167, 31, { center: true, width: 205 }) + t(d.location.name, 104, 210, 25, { center: true, width: 200 });
     } else if (b.type === 'almanac') {

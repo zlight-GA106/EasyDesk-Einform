@@ -10,6 +10,9 @@ import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import com.easysmart.einform.core.RefreshSequence;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 final class ScreenView extends View {
     interface Controls { void refresh(boolean force); void settings(); }
@@ -21,6 +24,7 @@ final class ScreenView extends View {
     private Runnable painted;
     private String status = "点击左下角设置连接";
     private String diagnostics = "";
+    private long displayedAt, nextRefreshAt;
     private boolean cleaning;
     ScreenView(Context context, final Controls controls) {
         super(context); density = getResources().getDisplayMetrics().density;
@@ -28,7 +32,7 @@ final class ScreenView extends View {
             public boolean onDown(MotionEvent event) { return true; }
             public boolean onSingleTapUp(MotionEvent event) {
                 if (!cleaning && event.getX() > getWidth() - dp(100) && event.getY() < dp(70)) controls.refresh(false);
-                else if (!cleaning && event.getX() < dp(100) && event.getY() > getHeight() - dp(60)) controls.settings();
+                else if (!cleaning && event.getX() < dp(100) && event.getY() > getHeight() - dp(90)) controls.settings();
                 return true;
             }
             public void onLongPress(MotionEvent event) {
@@ -43,6 +47,7 @@ final class ScreenView extends View {
     void status(String value) { status = value; if (!cleaning) invalidate(); }
     boolean waiting() { return bitmap == null || bitmap.isRecycled(); }
     void diagnostics(String value) { diagnostics = value; if (waiting() && !cleaning) invalidate(); }
+    void timing(long last, long next) { displayedAt = last; nextRefreshAt = next; if (!cleaning) invalidate(); }
     protected void onDraw(Canvas canvas) {
         canvas.drawColor(frame == RefreshSequence.Frame.BLACK ? Color.BLACK : Color.WHITE);
         paint.setColor(Color.BLACK);
@@ -64,19 +69,29 @@ final class ScreenView extends View {
                 y += dp(24);
                 for (String line : diagnostics.split("\n")) {
                     y = wrapped(canvas, line, dp(28), y, getWidth()-dp(56), dp(26));
-                    if (y > getHeight()-dp(60)) break;
+                    if (y > getHeight()-dp(115)) break;
                 }
             }
             {
                 paint.setColor(Color.WHITE); canvas.drawRect(getWidth()-dp(78), dp(3), getWidth()-dp(3), dp(43), paint);
                 paint.setColor(Color.BLACK); paint.setStyle(Paint.Style.STROKE);
                 canvas.drawRect(getWidth()-dp(78), dp(3), getWidth()-dp(3), dp(43), paint); paint.setStyle(Paint.Style.FILL);
-                paint.setTextAlign(Paint.Align.CENTER); paint.setTextSize(dp(16));
+                paint.setTextAlign(Paint.Align.CENTER); paint.setTextSize(dp(16)); paint.setFakeBoldText(false);
                 canvas.drawText("刷新", getWidth()-dp(40), dp(29), paint);
-                paint.setColor(Color.WHITE); canvas.drawRect(0, getHeight()-dp(31), getWidth(), getHeight(), paint);
-                paint.setColor(Color.BLACK); paint.setTextAlign(Paint.Align.LEFT); paint.setTextSize(dp(12));
-                canvas.drawText("设置", dp(8), getHeight()-dp(11), paint);
-                canvas.drawText(status, dp(60), getHeight()-dp(11), paint);
+                float top = getHeight()-dp(90);
+                paint.setColor(Color.WHITE); canvas.drawRect(0, top, getWidth(), getHeight(), paint);
+                paint.setColor(Color.BLACK); paint.setStrokeWidth(dp(1)); canvas.drawLine(dp(8), top, getWidth()-dp(8), top, paint);
+                paint.setTextAlign(Paint.Align.LEFT); paint.setTextSize(dp(20));
+                canvas.drawText("设置", dp(12), top+dp(52), paint);
+                paint.setTextSize(Math.min(dp(24), (getWidth()-dp(120))/22f));
+                String last = displayedAt > 0 ? "于" + time(displayedAt, "M / d 日 H时 m分") + "刷新" : "尚未完成刷新";
+                String next = nextRefreshAt > 0 ? "下一次刷新" + time(nextRefreshAt, "H时 m分") : "下一次刷新：等待连接";
+                canvas.drawText(last, dp(100), top+dp(35), paint);
+                canvas.drawText(next, dp(100), top+dp(69), paint);
+                if (waiting()) {
+                    paint.setTextSize(dp(14));
+                    wrapped(canvas, status, dp(28), top-dp(18), getWidth()-dp(56), dp(20));
+                }
             }
         }
         if (painted != null) {
@@ -88,12 +103,13 @@ final class ScreenView extends View {
     public boolean onTouchEvent(MotionEvent event) { return gestures.onTouchEvent(event); }
     private float wrapped(Canvas canvas, String text, float x, float y, float width, float lineHeight) {
         int offset = 0;
-        while (offset < text.length() && y < getHeight()-dp(40)) {
+        while (offset < text.length() && y < getHeight()-dp(95)) {
             int count = Math.max(1, paint.breakText(text, offset, text.length(), true, Math.max(1,width), null));
             canvas.drawText(text, offset, offset+count, x, y, paint);
             offset += count; y += lineHeight;
         }
         return y;
     }
+    private String time(long value, String pattern) { return new SimpleDateFormat(pattern, Locale.CHINA).format(new Date(value)); }
     private float dp(float value) { return value*density; }
 }

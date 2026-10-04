@@ -34,20 +34,25 @@ public final class AgentChecks extends Instrumentation {
                 .putString("siteId","QA").putString("profile","z9").putBoolean("configured",true)
                 .putBoolean("sound",true).putBoolean("clean",true).putBoolean("deep",false).putInt("dwell",400).commit();
             control("mode=good&revision=qa-1"); launch(); waitRevision("qa-1");
+            long firstPaint = displayedAt(); require(firstPaint > 0, "Painted page has no refresh timestamp");
             int requestsBefore=imagesRequested(control("")); refresh(false); SystemClock.sleep(2000);
             require(imagesRequested(control(""))==requestsBefore,"Unchanged revision downloaded PNG again");
+            require(displayedAt() == firstPaint, "Unchanged revision advanced refresh timestamp");
             File cache = activePng(context.getFilesDir()); String hash = digest(cache);
             control("mode=corrupt&revision=qa-bad"); refresh(false); SystemClock.sleep(6000);
             require(hash.equals(digest(cache)), "Corrupt PNG replaced last good file");
             require("qa-1".equals(displayed()), "Corrupt PNG advanced displayed revision");
+            require(displayedAt() == firstPaint, "Corrupt PNG advanced refresh timestamp");
             refresh(false); SystemClock.sleep(3000);
             control("mode=good&revision=qa-2&command=101"); refresh(false); waitRevision("qa-2");
+            require(displayedAt() > firstPaint, "New page did not advance refresh timestamp");
             SystemClock.sleep(2500);
             String ack = control(""); require(ack.contains("\"id\":101,\"status\":\"completed\""), "No completed ACK after display");
             String updated = digest(cache); control("mode=offline"); refresh(false); SystemClock.sleep(2500);
             require(updated.equals(digest(cache)), "Offline changed cached PNG");
             refresh(true); SystemClock.sleep(6000);
             require("qa-2".equals(displayed()), "Offline forced redraw lost revision");
+            long beforeRestart = displayedAt();
             runOnMainSync(new Runnable() { public void run() { activity.finish(); } }); waitForIdleSync();
             context.stopService(new Intent(context, AgentService.class)); SystemClock.sleep(1000);
             // Emulate power loss during AtomicFile replacement: backup is good, current file is partial.
@@ -55,6 +60,7 @@ public final class AgentChecks extends Instrumentation {
             java.io.FileOutputStream partial=new java.io.FileOutputStream(cache); partial.write(new byte[]{1,2,3});partial.close();
             launch(); SystemClock.sleep(3000);
             require(updated.equals(digest(activePng(context.getFilesDir()))), "Cold restart lost last-good PNG");
+            require(displayedAt() == beforeRestart, "Restoring cache changed actual refresh timestamp");
             runOnMainSync(new Runnable() { public void run() {
                 try {
                     java.lang.reflect.Field field=MainActivity.class.getDeclaredField("screen");field.setAccessible(true);
@@ -82,6 +88,7 @@ public final class AgentChecks extends Instrumentation {
     }
     private void refresh(final boolean force) { runOnMainSync(new Runnable() { public void run() { activity.refresh(force); } }); }
     private String displayed() { return preferences.getString("displayedRevision:" + identity,""); }
+    private long displayedAt() { return preferences.getLong("displayedAt:" + identity,0); }
     private void waitRevision(String revision) throws Exception {
         long deadline=SystemClock.elapsedRealtime()+90000;
         while (SystemClock.elapsedRealtime()<deadline) { if (revision.equals(displayed())) return; SystemClock.sleep(200); }
