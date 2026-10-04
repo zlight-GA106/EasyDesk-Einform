@@ -4,6 +4,8 @@ EasySmart 生态的局域网电子墨水终端服务端。服务器聚合黄历�
 
 Android 显示终端已加入同一仓库：[Z9 APK 构建、安装与首次验收](agent/README.md)。首版聚焦下载校验、缓存与「清洁提示 → 黑 → 白 → 新页面 → 短滴」。
 
+下载已验证的 Android 4.4 / API 19 APK 与完整源码包：[GitHub Releases](https://github.com/zlight-GA106/EasyDesk-Einform/releases)。当前版本为 `v0.1.2-z9`，参见 [发布说明](docs/RELEASE-v0.1.2-z9.md)。服务器源码包包含 Dockerfile 与 Compose 配置，部署步骤见 [Docker 文档](docs/DOCKER.md)。
+
 ## 启动
 
 需要 Node.js 20.9+（本次验证使用 Node.js 24.21.0）。
