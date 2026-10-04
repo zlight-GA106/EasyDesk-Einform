@@ -20,6 +20,7 @@ final class ScreenView extends View {
     private RefreshSequence.Frame frame = RefreshSequence.Frame.PAGE;
     private Runnable painted;
     private String status = "点击左下角设置连接";
+    private String diagnostics = "";
     private boolean cleaning;
     ScreenView(Context context, final Controls controls) {
         super(context); density = getResources().getDisplayMetrics().density;
@@ -40,6 +41,8 @@ final class ScreenView extends View {
         bitmap = image; frame = value; cleaning = busy; painted = callback; invalidate();
     }
     void status(String value) { status = value; if (!cleaning) invalidate(); }
+    boolean waiting() { return bitmap == null || bitmap.isRecycled(); }
+    void diagnostics(String value) { diagnostics = value; if (waiting() && !cleaning) invalidate(); }
     protected void onDraw(Canvas canvas) {
         canvas.drawColor(frame == RefreshSequence.Frame.BLACK ? Color.BLACK : Color.WHITE);
         paint.setColor(Color.BLACK);
@@ -55,9 +58,14 @@ final class ScreenView extends View {
                 float width = bitmap.getWidth()*scale, height = bitmap.getHeight()*scale;
                 canvas.drawBitmap(bitmap, null, new RectF((getWidth()-width)/2f, (getHeight()-height)/2f, (getWidth()+width)/2f, (getHeight()+height)/2f), paint);
             } else {
-                paint.setTextAlign(Paint.Align.CENTER); paint.setTextSize(dp(28));
-                canvas.drawText("EasyDesk Einform", getWidth()/2f, getHeight()/2f - dp(30), paint);
-                paint.setTextSize(dp(18)); canvas.drawText("首次使用，请设置服务器地址", getWidth()/2f, getHeight()/2f + dp(15), paint);
+                paint.setTextAlign(Paint.Align.LEFT); paint.setTextSize(dp(26)); paint.setFakeBoldText(true);
+                float y = wrapped(canvas, "请稍事等待，服务器正在准备今日信息......", dp(28), dp(115), getWidth()-dp(56), dp(38));
+                paint.setFakeBoldText(false); paint.setTextSize(dp(16));
+                y += dp(24);
+                for (String line : diagnostics.split("\n")) {
+                    y = wrapped(canvas, line, dp(28), y, getWidth()-dp(56), dp(26));
+                    if (y > getHeight()-dp(60)) break;
+                }
             }
             {
                 paint.setColor(Color.WHITE); canvas.drawRect(getWidth()-dp(78), dp(3), getWidth()-dp(3), dp(43), paint);
@@ -78,5 +86,14 @@ final class ScreenView extends View {
         }
     }
     public boolean onTouchEvent(MotionEvent event) { return gestures.onTouchEvent(event); }
+    private float wrapped(Canvas canvas, String text, float x, float y, float width, float lineHeight) {
+        int offset = 0;
+        while (offset < text.length() && y < getHeight()-dp(40)) {
+            int count = Math.max(1, paint.breakText(text, offset, text.length(), true, Math.max(1,width), null));
+            canvas.drawText(text, offset, offset+count, x, y, paint);
+            offset += count; y += lineHeight;
+        }
+        return y;
+    }
     private float dp(float value) { return value*density; }
 }

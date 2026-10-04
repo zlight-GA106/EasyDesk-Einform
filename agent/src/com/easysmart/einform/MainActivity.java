@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
+import android.util.DisplayMetrics;
 import android.view.KeyEvent;
 import android.view.WindowManager;
 import android.widget.CheckBox;
@@ -31,6 +32,14 @@ public final class MainActivity extends Activity implements AgentService.Listene
     private ToneGenerator tone;
     private boolean bound, resumed, failureSounded;
     private AlertDialog settings;
+    private String debugStatus = "等待连接", debugError = "none";
+    private final Runnable diagnostics = new Runnable() {
+        public void run() {
+            if (!resumed) return;
+            updateDiagnostics();
+            handler.postDelayed(this, 15000);
+        }
+    };
     private final ServiceConnection connection = new ServiceConnection() {
         public void onServiceConnected(ComponentName name, IBinder binder) {
             service = ((AgentService.LocalBinder)binder).service();
@@ -51,7 +60,7 @@ public final class MainActivity extends Activity implements AgentService.Listene
     protected void onResume() {
         super.onResume(); resumed = true;
         bound = bindService(new Intent(this, AgentService.class), connection, Context.BIND_AUTO_CREATE);
-        if (!new AppConfig(this).configured) handler.post(new Runnable() { public void run() { settings(); } });
+        handler.post(diagnostics);
     }
     protected void onPause() {
         resumed = false;
@@ -96,10 +105,15 @@ public final class MainActivity extends Activity implements AgentService.Listene
         }, config.dwell, config.deep, config.clean);
         sequence.start();
     }
-    public void status(String text, boolean failure) {
+    public void status(String text, boolean failure, String detail) {
+        debugStatus = text; debugError = detail.length() == 0 ? "none" : detail;
         screen.status(text);
+        updateDiagnostics();
         if (failure && !failureSounded) { failureSounded = true; beep(800, true); }
         else if (!failure) failureSounded = false;
+    }
+    private void updateDiagnostics() {
+        if (screen.waiting()) screen.diagnostics(DeviceDiagnostics.collect(this) + "\nStatus: " + debugStatus + "\nLast error: " + debugError);
     }
     private void beep(int millis, boolean error) {
         if (!new AppConfig(this).sound || tone == null) return;
@@ -109,7 +123,10 @@ public final class MainActivity extends Activity implements AgentService.Listene
         } catch (RuntimeException exception) { Log.w("EasyDesk.Display", "Tone failed", exception); }
     }
     public void refresh(boolean force) {
-        if (sequence == null && service != null) { screen.status(force ? "准备完整清屏" : "正在检查更新"); service.refresh(force); }
+        if (sequence == null && service != null) {
+            debugStatus = force ? "准备完整清屏" : "正在检查更新"; debugError = "none";
+            screen.status(debugStatus); updateDiagnostics(); service.refresh(force);
+        }
     }
     public void settings() {
         if (!resumed || sequence != null || (settings != null && settings.isShowing())) return;
@@ -125,7 +142,8 @@ public final class MainActivity extends Activity implements AgentService.Listene
         final CheckBox clean = check(form, "刷新前清洁显示屏", config.clean);
         final CheckBox deep = check(form, "深度清屏：黑白两轮", config.deep);
         final CheckBox sound = check(form, "提示音（使用媒体音量）", config.sound);
-        TextView help = new TextView(this); help.setText("点击右上角：检查更新；长按：用有效图片完整清屏。\n分辨率：" + getResources().getDisplayMetrics().widthPixels + "×" + getResources().getDisplayMetrics().heightPixels + " px\nUUID：" + config.uuid + "\n版本：" + AppConfig.VERSION); form.addView(help);
+        DisplayMetrics display = new DisplayMetrics(); getWindowManager().getDefaultDisplay().getRealMetrics(display);
+        TextView help = new TextView(this); help.setText("点击右上角：检查更新；长按：用有效图片完整清屏。\n分辨率：" + display.widthPixels + "×" + display.heightPixels + " px\nUUID：" + config.uuid + "\n版本：" + AppConfig.VERSION); form.addView(help);
         ScrollView scroll = new ScrollView(this); scroll.addView(form);
         settings = new AlertDialog.Builder(this).setTitle("连接与清屏设置").setView(scroll)
             .setPositiveButton("保存并连接", null).setNegativeButton("返回", null).create();

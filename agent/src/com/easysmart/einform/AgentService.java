@@ -30,7 +30,7 @@ import java.util.Map;
 public final class AgentService extends Service {
     public interface Listener {
         void image(Image image, boolean refresh);
-        void status(String message, boolean failure);
+        void status(String message, boolean failure, String detail);
     }
     public static final class Image {
         final long id;
@@ -57,6 +57,7 @@ public final class AgentService extends Service {
     private int width, height, interval = 300, failures;
     private String message = "等待连接", activeIdentity = "";
     private boolean messageFailure;
+    private String errorDetail = "";
     private final LinkedHashMap<Long,String> acknowledgements = new LinkedHashMap<Long,String>();
     private final LinkedHashMap<Long,String> completed = new LinkedHashMap<Long,String>();
     private final Runnable periodic = new Runnable() { public void run() { tick(false, false); } };
@@ -79,7 +80,7 @@ public final class AgentService extends Service {
         listener = value;
         if (pending != null) listener.image(pending, true);
         else if (displayed != null) listener.image(displayed, false);
-        listener.status(message, messageFailure);
+        listener.status(message, messageFailure, errorDetail);
     }
     void detach(Listener value) { if (listener == value) listener = null; }
     void restored(Image image) {
@@ -107,10 +108,13 @@ public final class AgentService extends Service {
         });
     }
     private void status(final String text, final boolean failure) {
+        status(text, failure, "");
+    }
+    private void status(final String text, final boolean failure, final String detail) {
         main.post(new Runnable() { public void run() {
             if (destroyed) return;
-            message = text; messageFailure = failure;
-            if (listener != null) listener.status(text, failure);
+            message = text; messageFailure = failure; errorDetail = detail.length() > 500 ? detail.substring(0,500) : detail;
+            if (listener != null) listener.status(text, failure, errorDetail);
         } });
     }
     private void offer(final Bitmap bitmap, final String revision, final ArrayList<Long> commands, final boolean refresh) {
@@ -243,11 +247,12 @@ public final class AgentService extends Service {
             }
         } catch (OutOfMemoryError exception) {
             Log.e("EasyDesk.Display", "Not enough memory to decode PNG; keeping previous page", exception);
-            failures++; for (Long id : executing) mark(id, "failed"); status("图片过大 · 已保留上一页", true);
+            failures++; for (Long id : executing) mark(id, "failed");
+            status(cachedBitmap == null ? "图片过大 · 等待有效图片" : "图片过大 · 已保留上一页", true, exception.toString());
         } catch (Exception exception) {
             Log.w("EasyDesk.Network", "Refresh failed; keeping previous page", exception);
             failures++; for (Long id : executing) if (config != null) mark(id, "failed");
-            status("连接 / 图片失败 · 已保留上一页", true);
+            status(cachedBitmap == null ? "连接 / 图片失败 · 等待有效图片" : "连接 / 图片失败 · 已保留上一页", true, exception.toString());
             if (forceRequested && cachedBitmap != null && !rendering) offer(cachedBitmap, cache.revision, new ArrayList<Long>(), true);
         } finally {
             if (!destroyed) {

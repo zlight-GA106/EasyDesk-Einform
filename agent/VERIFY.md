@@ -1,8 +1,8 @@
-# Z9 首版验证记录
+# Z9 终端验证记录
 
 2026-10-03，工作站 Windows，JDK 17 / Android SDK Platform 19（4.4.2），Build Tools 35.0.0。
 
-交付 APK `EasyDesk-Einform-Z9.apk`：33,242 bytes；SHA-256：
+首版 0.1.0-z9 的验证 APK `EasyDesk-Einform-Z9.apk`：33,242 bytes；SHA-256：
 
 ```text
 34ed408e9384adb080763f236f9f7795eb6b6c9a3973ecb092d4b57fe1fb8786
@@ -47,3 +47,19 @@ node --max-old-space-size=256 agent/checks/live-server.mjs
 故障 fixture 需要一张合法 PNG；可换为任意本项目服务器生成的 PNG。真实后端测试的数据、缓存和日志均在 `artifacts/agent-qa/live-server`，不会修改已有设备数据；mock 明确用于测试。
 
 没有连接 Z9 真机。未验证 ROM 安装限制、厂商电子墨水硬件全刷、实际残影、扬声器可听性、开机自启、长时间运行。模拟器使用通用 Canvas 黑白绘制，ToneGenerator 返回成功；不能把它等同于上述真机验收。明早按 README 的五分钟清单现场确认。
+
+## 2026-10-04 等待页与 Z9 真机验证
+
+版本 0.1.1-z9 / versionCode 2，APK 37,338 bytes，SHA-256：
+
+```text
+874d961ee67fbb010ea1167ae7fe874c617bde56a39eae6d03da76359c465967
+```
+
+- 使用用户提供的 ADB 服务 `-H 127.0.0.1 -P 5039`，连接序列号 `0123456789ABCDEF`。设备实际报告 Android 4.4.2 / API 19、armeabi-v7a、825×1200 px。
+- 标准安装和仅 v1 签名安装均返回 `INSTALL_FAILED_INVALID_APK`。在确认目标不存在后，仅新增 `/system/app/EasyDeskEinform.apk`，owner 0:0、权限 0644，恢复 `/system` 只读后重启。系统成功识别并运行 APP。后续本 APP 的 Java 更新通过同一路径覆盖，保留 UUID 与设置；没有替换其他系统 APK。
+- 通过实机截图检查默认等待标题全文，以及真实 IP、MAC、Wi-Fi 状态、RSSI、系统 uptime、电量 / 充电、Android 版本、物理分辨率、服务器地址、设备 / 站点 ID、状态和错误详情。没有有效 PNG 时才显示这些文本；没有首次配置弹窗覆盖等待页。
+- 真机读取的 IP 为 192.168.3.97。默认服务器 192.168.95.55:19900 的 HTTP 连接在 7000 ms 后超时，等待页能显示 `SocketTimeoutException`，连续失败保持退避并且不重复长鸣。未修改网络路由、Wi-Fi 或服务器监听配置。
+- 实机 APK 回读 SHA-256 与本机交付文件一致；确认 `/system` 仍为只读，APP 正常运行，没有本 APP 的 FATAL EXCEPTION。API 19 编译、签名验证和原有核心刷新 / PNG 校验检查通过。
+
+本次实机等待页截图、安装回读及日志在 `artifacts/agent-device-20261004/`（Git 忽略）。由于设备与服务器 HTTP 网络尚未连通，本次没有在真机完成新 PNG 下载和黑白清屏；此前模拟器记录保留在上面的首版章节，不能作为真机已联网的证明。
