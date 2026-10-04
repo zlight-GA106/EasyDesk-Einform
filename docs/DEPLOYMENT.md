@@ -68,3 +68,15 @@ docker compose restart server
 工作站实际生成新 PNG，检查 825×1200、单通道 8 位灰阶、ETag 304，并确认农历布局。对这次新生成的图片执行删除，取图立即返回 404，列表移至回收站；只重启本项目后，管理员会话和回收站条目保留，恢复后的 PNG 字节与原图相同且 ETag 仍返回 304。没有注册远端测试设备，设备数量更新前后仍为 0。浏览器已登录远端新版工作台并检查图片完整加载。
 
 原有 21 个其他容器的 ID、Image、Names、State、Ports 与更新前一致。源码与候选测试记录位于 `releases/2c7310a`（内含最终 `d182057` 的源码清单），最终运行验收记录为 `lunar-district-d182057-verification.json`。区县级别修正更新前另外备份三个源码文件至 `backups/geo-district-d182057`，保留前一工作镜像为 `easydesk-einform-server:before-geo-d182057`。最终镜像再次通过全部 14 项独立容器测试，原运行配置哈希保持相同。服务器仍保留 Mock「仅测试」，和风天气 Host / Key 尚未提供；GeoAPI 区县查询、坐标反查与天气 v1 请求格式经过官方文档及离线接口测试，真实账户调用待配置凭据后验证。GeoAPI 城市级结果明确标注仅城市，不冒充区县。
+
+## 2026-10-04 日历排版与 Android 终端更新
+
+功能源码提交 c944fcfbff16f1f03aec920e70e8baa64807cf54。运行镜像为 sha256:232ff5e168fd66d38196bbfeddb88a1d3f4304ecf2829da9a4577a048a4c4ec4，19900 端口服务 healthy。候选镜像在独立配置、无网络、512 MiB / 1 核的容器内通过 14 项测试，然后仅更新 easydesk-einform-server。
+
+更新仅涉及本项目两个 SVG 模板、标准排版文件与 runtime/config/profiles 内已有的三个 Profile。输出尺寸全部保留，Z9 仍为 825×1200。Z9 既有手调字号已按本次用户要求扩大排版；名称、尺寸、地区与设备参数保留。标准模板关闭 content / status 底部两个块，留出 APP 底栏空间，顶部标题缩小并取消 EASYSMART。Mock 测试标记继续存在于管理后台。
+
+发布源码与 APK 位于 releases/calendar-c944fcfbff16，更新前受影响文件备份位于 backups/calendar-c944fcfbff16/affected-files.tar.gz；上一镜像保留为 easydesk-einform-server:before-calendar-c944fcfbff16。主配置 runtime/config/config.yaml 的哈希更新前后相同，另有 21 个容器的 ID、镜像、状态与端口保持一致，未删除服务器其他内容。
+
+真实 Z9 已连接服务器，安装版本 0.1.2-z9。新 PNG 40db645b-ee04-42bd-b702-811d18090af0 已送达并获命令 7 completed，原手动选择的旧图仍保留于缓存。APP 底栏为 90 dp，记录实际完成显示的时间和下一次图片检查 / 失败重试时间；等待页显示 CPU 型号 / 频率、系统 RAM 与 APP PSS。用户原服务器地址、UUID、Profile 和深度清屏设置已校验保留。
+
+详细真机证据见 agent/VERIFY.md 最新章节和该发布目录的 verification 文件夹。日志已验证 Android 提示页、黑白两轮、新页面与短提示音请求顺序，实际残影、可听声音和长时间运行仍需现场观察。
