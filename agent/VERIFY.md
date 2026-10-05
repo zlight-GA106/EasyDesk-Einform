@@ -123,4 +123,6 @@ Easyupdate 使用全局 PublicURL 公告下载地址，可能与终端的转发�
 - Z9 已通过同一系统 APK 路径更新为 0.1.4-z9，回读哈希一致、设置保留、系统分区只读。后台收到新版在线心跳；重绘命令 16 从 09:21:36.767 创建到 09:21:42.233 completed 约 5.5 秒，维护模式、PNG 选择与刷新参数保留，APP 没有 FATAL EXCEPTION。
 - 根据用户提供的转发地址，仅将 APP 的更新根地址设为 `http://192.168.3.32:19910`，原显示根地址与其他设置保留。服务器管理帮助页面实际可访问，SSH 确认监听 `*:19910`；Z9 经新转发仍在 HTTP 响应前断开，APP 记录 `EOFException`，BusyBox 请求也无法收到响应。因此本次实机更新联网仍未通过；显示和命令链路正常。
 
-证据在 `artifacts/update-alias-20261005/`：`android-build.log`、`core-checks.txt`、`update-instrumentation.txt`、`update-fixture-requests.json`、`installer-confirmation.png`、`z9-install-report.json`、`z9-update-report.json`、`z9-final.png` 与 `server-update-network.json`。真机旧 APK 和原设置仍仅保存在本机忽略目录；0.1.3 发布资产保留。
+进一步用 Z9 原始 TCP 请求核对：对 `192.168.3.32:19910` 的八组 GET（HTTP/1.0 与 1.1、转发及原服务器 Host、根路径及 latest 接口）均在约 2.5–2.8 秒结束，收到零字节，没有 HTTP 状态行。相同方法访问 `192.168.3.32:19900/api/health` 返回 `200 OK`；设备 loopback 的 19910 拒绝连接，Android 全局代理未启用。由此排除 APP 响应解析及请求参数问题，故障仍位于 19910 的转发 / 上游链路，未确定具体关闭连接的一跳。
+
+证据在 `artifacts/update-alias-20261005/`：`android-build.log`、`core-checks.txt`、`update-instrumentation.txt`、`update-fixture-requests.json`、`installer-confirmation.png`、`z9-install-report.json`、`z9-update-report.json`、`z9-final.png`、`server-update-network.json` 与 `z9-forward-diagnostics.txt`。真机旧 APK 和原设置仍仅保存在本机忽略目录；0.1.3 发布资产保留。
