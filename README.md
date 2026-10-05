@@ -4,7 +4,7 @@ EasySmart 生态的局域网电子墨水终端服务端。服务器聚合黄历�
 
 Android 显示终端已加入同一仓库：[Z9 APK 构建、安装与首次验收](agent/README.md)。首版聚焦下载校验、缓存与「清洁提示 → 黑 → 白 → 新页面 → 短滴」。
 
-下载 Android 4.4 / API 19 APK 与完整源码包：[GitHub Releases](https://github.com/zlight-GA106/EasyDesk-Einform/releases)。当前版本为 `v0.1.3-z9`，参见 [发布说明](docs/RELEASE-v0.1.3-z9.md)。服务器源码包包含 Dockerfile 与 Compose 配置，部署步骤见 [Docker 文档](docs/DOCKER.md)。
+下载 Android 4.4 / API 19 APK 与完整源码包：[GitHub Releases](https://github.com/zlight-GA106/EasyDesk-Einform/releases)。当前版本为 `v0.1.4-z9`，参见 [发布说明](docs/RELEASE-v0.1.4-z9.md)。服务器源码包包含 Dockerfile 与 Compose 配置，部署步骤见 [Docker 文档](docs/DOCKER.md)。
 
 ## 启动
 
@@ -54,7 +54,7 @@ Host 不含协议或路径。凭据仅保存在本地，不会回显给前端或
 
 新版终端通过独立长轮询即时领取命令，heartbeat 只负责注册、状态上报和旧客户端兼容。手动重绘可直接使用已校验的本地图片；维护页与重启命令不等待心跳或定时图片检查。重启前持久化命令结果，恢复后补 ACK，保留 UUID、配置与缓存。接口见 [客户端协议](docs/API.md)。
 
-终端接入 [Easyupdate](https://github.com/zlight-GA106/Easyupdate)，默认更新地址为 `http://192.168.95.55:19910`，可在 APP 设置中修改并手动检查更新。下载后校验大小、SHA-256、包名、版本、签名及最低 Android 版本，再交由系统安装器；保留同一签名以更新已有安装。
+终端接入 [Easyupdate](https://github.com/zlight-GA106/Easyupdate)，默认更新地址为 `http://192.168.95.55:19910`，可在 APP 设置中修改并手动检查更新。使用局域网转发时填写终端实际可达的根地址，APK 始终从这个地址的固定包名 / 版本路径下载，不使用公告中的其他主机。下载后校验大小、SHA-256、包名、版本、签名及最低 Android 版本，再交由系统安装器；保留同一签名以更新已有安装。
 
 后台「维护页面」令服务器生成维护 PNG 并下发 show_maintenance；「返回主页」恢复普通 PNG 并下发 refresh。客户端本地长按维护页面、右上角刷新交互和断网低电量提示由 Android 实现。服务端 PNG 不叠加低电量警告。
 

@@ -83,10 +83,12 @@ final class UpdateClient {
         if (!release.getString("sha256").matches("[a-fA-F0-9]{64}")) throw new Exception("更新缺少有效的 SHA-256");
         URI origin = new URI(AppConfig.validServer(base)), download = new URI(release.getString("download_url"));
         String path = "/api/v1/apps/" + PACKAGE + "/releases/" + code + "/download";
-        if (!origin.getScheme().equals(download.getScheme()) || !origin.getRawAuthority().equalsIgnoreCase(download.getRawAuthority())
+        if (!("http".equals(download.getScheme()) || "https".equals(download.getScheme())) || download.getHost() == null || download.getPort() > 65535
             || !path.equals(download.getRawPath()) || download.getRawQuery() != null || download.getFragment() != null || download.getUserInfo() != null)
-            throw new Exception("更新下载地址必须来自配置的 Easyupdate 服务");
-        return download.toURL();
+            throw new Exception("更新下载地址必须是本 APP 版本的有效 Easyupdate 下载路径");
+        // Easyupdate advertises its global PublicURL, which can differ from a LAN forwarding address.
+        // Use only its exact package/version path; all network traffic stays on the configured origin.
+        return new URL(origin.toASCIIString() + path);
     }
     private void downloadNow(JSONObject release) {
         File directory = new File(context.getFilesDir(), "updates");
