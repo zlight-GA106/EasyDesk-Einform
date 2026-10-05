@@ -80,3 +80,15 @@ docker compose restart server
 真实 Z9 已连接服务器，安装版本 0.1.2-z9。新 PNG 40db645b-ee04-42bd-b702-811d18090af0 已送达并获命令 7 completed，原手动选择的旧图仍保留于缓存。APP 底栏为 90 dp，记录实际完成显示的时间和下一次图片检查 / 失败重试时间；等待页显示 CPU 型号 / 频率、系统 RAM 与 APP PSS。用户原服务器地址、UUID、Profile 和深度清屏设置已校验保留。
 
 详细真机证据见 agent/VERIFY.md 最新章节和该发布目录的 verification 文件夹。日志已验证 Android 提示页、黑白两轮、新页面与短提示音请求顺序，实际残影、可听声音和长时间运行仍需现场观察。
+
+## 2026-10-05 定时刷新、回收站与 Easyupdate 更新
+
+功能提交为 `3a5537e759d541522d57f2c8ed8ea5482708b70e`，镜像为 `sha256:be1369237de12b40d182dbedf44bef61a0584bd23fca92deac4aa2c877d745ea`。19900 服务 healthy，候选镜像在独立配置、无网络、512 MiB / 1 核容器中通过全部 18 项测试。
+
+更新前校验待替换源码与旧提交一致，备份受影响的本项目文件并保留旧镜像，再仅更新 `easydesk-einform-server`。源码与 APK 保存在 `releases/controls-3a5537e759d5`，备份为 `backups/controls-3a5537e759d5`；旧镜像标签为 `easydesk-einform-server:before-controls-3a5537e759d5`。主配置及全部运行 Profile 的哈希保持一致；其他 21 个容器的 ID、镜像、状态及端口保持一致。
+
+已实际验证管理员登录、新版回收站与小时设置页面脚本、独立命令接口以及 825×1200 单通道 8 位灰阶缓存 PNG。没有清空用户回收站或更改测试机当前维护模式。原自动计划仍为 0.5 小时、自适应开启；新增自动强制刷新 APP 开关保持关闭。登录「图片预览」可设置小时数并开启；手动命令不依赖这个开关。
+
+在现有 `192.168.95.55:19910` Easyupdate 服务中仅注册 `com.easysmart.einform`（app ID 2），发布 0.1.3-z9 / code 4（release ID 1）并关联本项目 GitHub 来源。已有其他应用保持不变，未重启或修改 Easyupdate 服务配置。已验证 code 3 查询返回 code 4 更新、code 4 查询无更新，APK 下载大小及 SHA-256 与交付文件一致。
+
+部署验收时真实 Z9 在线，上报 0.1.2-z9。新版 APK 已完成 API19 ARM 模拟器回归及 Easyupdate 系统安装确认页验证；本机 5039 ADB 暂未接受连接，尚未将本版写入 Z9。旧版没有更新入口，首次迁移至本版需手动安装，后续版本可使用 APP 内 Easyupdate。详细证据在本机忽略目录 `artifacts/control-update-20261004`。
