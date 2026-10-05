@@ -6,9 +6,9 @@ import java.net.URI;
 import java.util.UUID;
 
 final class AppConfig {
-    static final String VERSION = "0.1.2-z9";
+    static final String VERSION = "0.1.3-z9";
     final SharedPreferences preferences;
-    final String server, uuid, deviceId, siteId, profile;
+    final String server, updateServer, uuid, deviceId, siteId, profile;
     final boolean configured, sound, deep, clean;
     final int dwell;
 
@@ -18,6 +18,7 @@ final class AppConfig {
         if (saved.length() == 0) { saved = UUID.randomUUID().toString(); preferences.edit().putString("uuid", saved).commit(); }
         uuid = saved;
         server = preferences.getString("server", "http://192.168.95.55:19900");
+        updateServer = preferences.getString("updateServer", "http://192.168.95.55:19910");
         deviceId = preferences.getString("deviceId", "Z9-" + uuid.substring(0, 6));
         siteId = preferences.getString("siteId", deviceId);
         profile = preferences.getString("profile", "z9");

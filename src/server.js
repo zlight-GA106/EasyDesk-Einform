@@ -18,7 +18,7 @@ try {
   server.requestTimeout = 30000; server.headersTimeout = 15000;
   server.on('error', async error => { console.error(`Server startup failed: ${error.code}`); await system.close(); process.exitCode = 1; });
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
-    if (closing) return; closing = true; clearInterval(monitor); system.display.stop?.();
+    if (closing) return; closing = true; clearInterval(monitor); system.commands.stopWaiting(); system.display.stop?.();
     const deadline = setTimeout(() => process.exit(1), 10000); deadline.unref();
     server.close(async () => { await discovery?.close(); log.info('server_stopped'); await system.close(); clearTimeout(deadline); });
   });

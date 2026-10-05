@@ -40,6 +40,7 @@ render:
     enabled: true
     intervalSeconds: 1800
     adaptive: true
+    refreshDevices: false # true: 定时生成新 PNG 后通知自动图片模式的 APP 刷新
     checkSeconds: 30
 device:
   heartbeatTimeoutSeconds: 180

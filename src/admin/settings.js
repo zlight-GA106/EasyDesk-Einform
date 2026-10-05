@@ -44,13 +44,14 @@ export class Settings {
     this.log.info('system_config_changed'); return this.systemInfo();
   }
   async saveRender(body) {
-    check(body && Object.keys(body).every(k => ['retentionDays', 'intervalSeconds', 'enabled', 'adaptive', 'defaultProfile'].includes(k)), '图片设置字段无效');
+    check(body && Object.keys(body).every(k => ['retentionDays', 'intervalSeconds', 'enabled', 'adaptive', 'refreshDevices', 'defaultProfile'].includes(k)), '图片设置字段无效');
     const integer = (v, name, min, max) => { number(v, name, min, max); check(Number.isInteger(v), '配置必须为整数'); return v; };
     const retentionDays = integer(body.retentionDays, '保存天数', 1, 30);
     const intervalSeconds = integer(body.intervalSeconds, '生成间隔', 30, 86400);
     for (const key of ['enabled', 'adaptive']) check(typeof body[key] === 'boolean', `${key} 必须为布尔值`);
+    if (body.refreshDevices !== undefined) check(typeof body.refreshDevices === 'boolean', 'refreshDevices 必须为布尔值');
     check(Object.hasOwn(this.config.render.profiles, body.defaultProfile), '默认 profile 不存在');
-    const generation = { ...this.config.render.generation, intervalSeconds, enabled: body.enabled, adaptive: body.adaptive };
+    const generation = { ...this.config.render.generation, intervalSeconds, enabled: body.enabled, adaptive: body.adaptive, refreshDevices: body.refreshDevices ?? this.config.render.generation.refreshDevices };
     await this.persist(next => { next.render ||= {}; Object.assign(next.render, { retentionDays, generation, defaultProfile: body.defaultProfile }); });
     Object.assign(this.config.render, { retentionDays, generation, defaultProfile: body.defaultProfile });
     this.display.invalidate(); this.log.info('render_settings_changed'); return this.display.info();

@@ -81,3 +81,19 @@ node --max-old-space-size=256 agent/checks/live-server.mjs
 - 为观察无图页，仅临时将本 APP 地址改为本机拒绝连接的端口，测试后完整恢复原设置文件，逐项确认 UUID、地址、Profile、清屏 / 声音 / 停留参数不变；缓存恢复后的刷新时间仍为 14:06。APP 最终停留在新版正常信息页，没有本 APP 的 FATAL EXCEPTION。
 
 证据在 `artifacts/layout-update-20261004/`：`z9-page.png`、`z9-waiting.png`、`z9-final.png`、`z9-refresh.log`、`android-checks.log`、`docker-tests.log`、`live.json`。上述日志证明 Android 绘制顺序及提示音请求成功；实际声响、电子墨水屏残影和多日稳定性仍需现场观察。
+
+## 2026-10-05 独立命令与 Easyupdate 验证
+
+版本 0.1.3-z9 / versionCode 4，APK 49,626 bytes，SHA-256：
+
+```text
+503db9cb8c908b253822e3a069eb51a727dc0a629fefe71d28b195f5744f199c
+```
+
+- API 19 bootclasspath、Java 7、D8 min-api 19 构建通过，v1 / v2 签名通过，包名与已有 Z9 安装保持一致。
+- 独立 Android 4.4.2 ARM 模拟器执行新版交付 APK：首次显示、未变版本、坏 PNG 拒绝、缓存恢复、绘制后 ACK、离线缓存重绘全部通过。心跳故意阻塞 15 秒时，独立命令仍在 12 秒内完成新页和 ACK。绘制中收到的维护命令保留并随后执行；同 revision 的 automatic 命令完成重绘。
+- 远程 restart_app 重启本 APP Activity / Service，保留 UUID、缓存与实际刷新时间；同一已完成命令重投不再次重启。迟到的旧 automatic ID 不能覆盖已完成的新手动页面，返回 failed ACK。
+- Easyupdate API v1 检查 / 心跳、未来同签名 APK 下载与校验通过。大小、SHA、签名、最低系统版本、跨源地址、重定向、错误包名及降级均被拒绝；坏下载保留此前有效 APK。
+- API 19 系统安装器已实际打开确认页，正确识别为已有 EasyDesk 的更新并显示无新增权限。只打开确认页，未安装测试版本；测试 APK 不发布。KitKat 的 file URI 兼容与支持 content URI 的读取路径均检查通过。
+
+证据在 Git 忽略的 `artifacts/control-update-20261004/`：`android-build.log`、`android-instrumentation.txt`、`update-instrumentation.txt`、`installer-confirmation.png`。模拟器测试使用专用 UUID、缓存与本机 fixture，没有替换真实 Z9 的设置。本版 Z9 实机更新仍待 ADB 可连接时确认；设备连接显示服务不等于新版 APK 已安装，也不等于系统安装器更新已验证。

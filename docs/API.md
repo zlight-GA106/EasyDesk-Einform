@@ -40,6 +40,12 @@
 
 已注册设备的服务器别名为权威值。保存响应中的 deviceId、siteId 和刷新参数；管理员改名后继续用 UUID 上报，不重新注册。
 
+## 独立命令通道
+
+`GET /api/device/:deviceId/commands?internalUuid=<UUID>&after=<ID>&wait=25`。UUID 确定设备归属，路径中的旧别名仍可取回当前 deviceId。`wait` 为 0–25 秒；有待执行命令立即返回，否则等待入队通知或超时。响应为 `{ok:true,commands:[{id,type,payload}],cursor,deviceId,siteId,profile,refreshIntervalSeconds,displayMode}`，设备保存响应中的当前配置。
+
+Android 使用独立网络线程持续连接，命令不等待 heartbeat 或图片检查间隔。heartbeat 继续注册设备和上报状态，并兼容旧客户端领取命令。游标不隐藏未 ACK 的命令：客户端持久化已完成 ID，按 ID 去重；命令执行中重复收到时应短暂退避，完成后独立发送 ACK。服务器关闭或客户端断开会释放等待连接。
+
 ## 图片和 Meta
 
 `GET /api/device/:deviceId/meta` 返回直接对象，适配简单客户端：
@@ -66,15 +72,15 @@
 {"internalUuid":"11111111-1111-4111-8111-111111111111","status":"completed"}
 ```
 
-执行失败用 `failed`。需先由 heartbeat 领取，其他 UUID 的命令返回 404，过期返回 409。ACK 可重复；服务器返回该命令已经记录的最终结果。客户端持久化已处理 ID，重复投递不重复执行。
+执行失败用 `failed`。需先由独立命令通道或 heartbeat 领取，其他 UUID 的命令返回 404，过期返回 409。ACK 可重复；服务器返回该命令已经记录的最终结果。客户端持久化已处理 ID，重复投递不重复执行。
 
 | 类型 | 客户端行为 |
 | --- | --- |
-| refresh | 重新检查 meta 并按需下载 |
+| refresh | 重新检查 meta 并按需下载；payload 指定 image / imageId / revision 时取该 PNG，automatic:true 时强制重绘 |
 | force_redraw | 获取/使用 PNG，强制本地电子墨水重绘 |
 | show_maintenance | 获取维护 PNG / 进入维护页 |
 | restart_app | 安全持久化已处理 ID 与执行状态，再重启 APP；重启后补 ACK |
-| reload_config | 应用 heartbeat 返回的当前配置 |
+| reload_config | 应用独立命令通道 / heartbeat 返回的当前配置 |
 
 服务器「返回主页」恢复 normal 模式并发送 refresh。终端本地低电量、离线提示及点击交互由 Android 实现。
 
@@ -100,6 +106,8 @@ JSON 成功响应通常为 `{ "ok": true, "data": ... }`，失败统一 `{ "ok":
 | GET / PUT | /api/admin/weather | 缓存与配置 / 设置 Provider 与默认地区 |
 | GET / PUT | /api/admin/system | 服务信息 / 全局设备默认值 |
 | GET | /api/admin/logs | 最近脱敏日志 |
+| GET / DELETE | /api/admin/images/trash | 回收站列表 / 永久清空，返回 removed、failed、protected 数量 |
+| GET / PUT | /api/admin/render | PNG 保存期限、生成间隔 intervalSeconds、enabled / adaptive / refreshDevices 与默认 Profile |
 | GET / POST | /api/admin/custom-content | 内容列表 / 新建 |
 | PUT / DELETE | /api/admin/custom-content/:id | 编辑 / 删除 |
 

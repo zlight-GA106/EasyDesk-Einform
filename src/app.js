@@ -8,7 +8,7 @@ import { DeviceRegistry } from './device/registry.js';
 import { installAdmin } from './admin/routes.js';
 import { CommandQueue } from './device/commands.js';
 import { Logger } from './logger.js';
-import { ApiError } from './errors.js';
+import { ApiError, check, uuid } from './errors.js';
 import { ImageLibrary } from './render/image-library.js';
 
 export async function createApp(config) {
@@ -42,7 +42,23 @@ export async function createApp(config) {
   });
   app.get('/api/device/:deviceId/meta', async (req, res) => {
     const device = registry.byDeviceId(req.params.deviceId); const result = await display.get(device.deviceId);
-    res.set('Cache-Control', 'no-store').json({ revision: result.revision, imageId: result.imageId, image: `/api/display/${encodeURIComponent(device.deviceId)}.png`, generatedAt: result.generatedAt, expiresAt: result.expiresAt, nextGenerationAt: display.schedule.get(device.internalUuid) || null, nextRefresh: new Date(Date.now() + device.refreshIntervalSeconds * 1000).toISOString(), stale: Boolean(result.fallback) });
+    res.set('Cache-Control', 'no-store').json({ revision: result.revision, imageId: result.imageId, image: `/api/display/${encodeURIComponent(device.deviceId)}.png`, generatedAt: result.generatedAt, expiresAt: result.expiresAt, nextGenerationAt: display.schedule.get(device.internalUuid) || null, nextRefresh: new Date(Date.now() + device.refreshIntervalSeconds * 1000).toISOString(), refreshIntervalSeconds: device.refreshIntervalSeconds, deviceId: device.deviceId, siteId: device.siteId, profile: device.profile, displayMode: device.displayMode || 'normal', stale: Boolean(result.fallback) });
+  });
+  app.get('/api/device/:deviceId/commands', async (req, res) => {
+    // UUID owns device identity; administrator aliases may change independently.
+    const internalUuid = uuid(req.query.internalUuid);
+    const device = registry.byUuid(internalUuid);
+    const seconds = Number(req.query.wait ?? 25), after = Number(req.query.after ?? 0);
+    check(Number.isInteger(seconds) && seconds >= 0 && seconds <= 25, 'wait 必须为 0–25 秒');
+    check(Number.isSafeInteger(after) && after >= 0, '命令游标无效');
+    const abort = new AbortController(), onClose = () => abort.abort();
+    res.once('close', onClose);
+    try {
+      const pending = await commands.wait(device.internalUuid, seconds * 1000, abort.signal);
+      if (res.destroyed || abort.signal.aborted) return;
+      const current = registry.byUuid(internalUuid);
+      res.set('Cache-Control', 'no-store').json({ ok: true, commands: pending, cursor: Math.max(after, ...pending.map(c => c.id)), deviceId: current.deviceId, siteId: current.siteId, profile: current.profile, refreshIntervalSeconds: current.refreshIntervalSeconds, displayMode: current.displayMode || 'normal' });
+    } finally { res.removeListener('close', onClose); }
   });
   app.post('/api/device/heartbeat', async (req, res) => {
     let device = await registry.heartbeat(req.body, req.ip);
@@ -57,6 +73,6 @@ export async function createApp(config) {
     if (status >= 500) log.warn('request_failed', { code: error.code || 'INTERNAL_ERROR' });
     res.status(status).json({ ok: false, error: { code: error.code || (status === 400 ? 'INVALID_INPUT' : 'INTERNAL_ERROR'), message: error instanceof ApiError ? error.message : status >= 500 ? '服务器处理失败' : error.type === 'entity.parse.failed' ? 'JSON 格式错误' : error.message } });
   });
-  const close = async () => { await display.stopAndWait?.(); await Promise.allSettled([...display.pending.values()]); await Promise.all([registry.store.queue, weather.store.queue, commands.store.queue, images.queue, images.store.queue, display.jobs.queue, admin.profiles.queue, admin.settings.queue, admin.content.store.queue, admin.sessions.store.queue]); await log.flush(); };
+  const close = async () => { commands.stopWaiting(); await display.stopAndWait?.(); await Promise.allSettled([...display.pending.values()]); await Promise.all([registry.store.queue, weather.store.queue, commands.store.queue, images.queue, images.store.queue, display.jobs.queue, admin.profiles.queue, admin.settings.queue, admin.content.store.queue, admin.sessions.store.queue]); await log.flush(); };
   return { app, weather, renderer, registry, display, commands, images, log, close, ...admin };
 }

@@ -46,8 +46,19 @@ public final class AgentChecks extends Instrumentation {
             refresh(false); SystemClock.sleep(3000);
             control("mode=good&revision=qa-2&command=101"); refresh(false); waitRevision("qa-2");
             require(displayedAt() > firstPaint, "New page did not advance refresh timestamp");
-            SystemClock.sleep(2500);
-            String ack = control(""); require(ack.contains("\"id\":101,\"status\":\"completed\""), "No completed ACK after display");
+            waitAck(101);
+            // Command delivery and manual redraw must progress with a separately blocked heartbeat.
+            control("heartbeat=slow"); refresh(false); SystemClock.sleep(500);
+            long independentStart = SystemClock.elapsedRealtime();
+            control("mode=good&revision=qa-3&command=102&type=refresh"); waitRevision("qa-3",10000); waitAck(102);
+            require(SystemClock.elapsedRealtime()-independentStart<12000,"Command waited for the 15-second blocked heartbeat");
+            control("command=103&type=force_redraw"); SystemClock.sleep(500);
+            control("revision=qa-maint&command=104&type=show_maintenance");
+            waitAck(103); waitAck(104); waitRevision("qa-maint");
+            control("revision=qa-2&command=105&type=refresh&heartbeat=fail"); waitRevision("qa-2"); waitAck(105);
+            long beforeAutomatic = displayedAt();
+            control("command=106&type=refresh&automatic=1"); waitAck(106);
+            require(displayedAt()>beforeAutomatic,"Same-revision automatic refresh did not redraw");
             String updated = digest(cache); control("mode=offline"); refresh(false); SystemClock.sleep(2500);
             require(updated.equals(digest(cache)), "Offline changed cached PNG");
             refresh(true); SystemClock.sleep(6000);
@@ -75,7 +86,18 @@ public final class AgentChecks extends Instrumentation {
             SystemClock.sleep(1000); int workers=0;
             for (Thread thread : Thread.getAllStackTraces().keySet()) if (thread.isAlive() && "EasyDesk.Network".equals(thread.getName())) workers++;
             require(workers==1, "Repeated service starts created " + workers + " network threads");
-            result.putString("stream","PASS API19: first PNG, unchanged revision, corrupt/truncated rejection, last-good preservation, new revision, ACK after rendering, offline forced redraw, interrupted-write recovery, cold cached restart, bounded service worker\n");
+            control("mode=good&heartbeat=fail&command=107&type=restart_app"); waitAck(107); SystemClock.sleep(3000);
+            require(uuid.equals(preferences.getString("uuid","")),"Remote restart changed UUID");
+            require(updated.equals(digest(activePng(context.getFilesDir()))),"Remote restart lost PNG cache");
+            require(displayedAt()==beforeRestart,"Remote cached restore changed paint timestamp");
+            control("command=108&type=force_redraw"); waitAck(108);
+            long startedBeforeRedelivery = serviceActiveSince(context);
+            control("command=107&type=restart_app"); waitAck(107); SystemClock.sleep(3000);
+            require(serviceActiveSince(context)==startedBeforeRedelivery,"Redelivered completed restart created another service");
+            control("revision=qa-watermark&command=110&type=refresh"); waitRevision("qa-watermark"); waitAck(110);
+            long beforeStale=displayedAt(); control("revision=qa-stale&command=109&type=refresh&automatic=1"); waitAck(109,"failed");
+            require("qa-watermark".equals(displayed())&&displayedAt()==beforeStale,"Older automatic command overwrote a later manual page");
+            result.putString("stream","PASS API19: valid/unchanged/corrupt PNG and cache recovery; telemetry-independent commands; queue during rendering; maintenance; same-revision automatic redraw; ACK after paint; offline cached redraw; remote service/activity restart with UUID/cache preservation and redelivery deduplication\n");
             finish(Activity.RESULT_OK,result);
         } catch (Throwable exception) {
             android.util.Log.e("EasyDesk.Checks","Integration check failed",exception);
@@ -90,9 +112,26 @@ public final class AgentChecks extends Instrumentation {
     private String displayed() { return preferences.getString("displayedRevision:" + identity,""); }
     private long displayedAt() { return preferences.getLong("displayedAt:" + identity,0); }
     private void waitRevision(String revision) throws Exception {
-        long deadline=SystemClock.elapsedRealtime()+90000;
+        waitRevision(revision,90000);
+    }
+    private void waitRevision(String revision,long timeout) throws Exception {
+        long deadline=SystemClock.elapsedRealtime()+timeout;
         while (SystemClock.elapsedRealtime()<deadline) { if (revision.equals(displayed())) return; SystemClock.sleep(200); }
         throw new Exception("Timed out waiting for painted revision " + revision + "; actual=" + displayed());
+    }
+    private void waitAck(int id) throws Exception {
+        waitAck(id,"completed");
+    }
+    private void waitAck(int id,String status) throws Exception {
+        long deadline=SystemClock.elapsedRealtime()+30000;
+        while(SystemClock.elapsedRealtime()<deadline){if(control("").contains("\"id\":"+id+",\"status\":\""+status+"\""))return;SystemClock.sleep(200);}
+        throw new Exception("No "+status+" ACK for command "+id);
+    }
+    private static long serviceActiveSince(Context context)throws Exception{
+        android.app.ActivityManager manager=(android.app.ActivityManager)context.getSystemService(Context.ACTIVITY_SERVICE);
+        for(android.app.ActivityManager.RunningServiceInfo service:manager.getRunningServices(100))
+            if("com.easysmart.einform.AgentService".equals(service.service.getClassName()))return service.activeSince;
+        throw new Exception("No running display service");
     }
     private String control(String query) throws Exception {
         HttpURLConnection connection=(HttpURLConnection)new URL(base+"/control?"+query).openConnection();

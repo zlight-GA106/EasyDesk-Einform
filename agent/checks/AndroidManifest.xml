@@ -5,4 +5,5 @@
     <application android:label="Einform QA" />
     <instrumentation android:name=".AgentChecks" android:targetPackage="com.easysmart.einform" android:label="API19 refresh checks" />
     <instrumentation android:name=".LiveChecks" android:targetPackage="com.easysmart.einform" android:label="Actual server protocol checks" />
+    <instrumentation android:name=".UpdateChecks" android:targetPackage="com.easysmart.einform" android:label="API19 Easyupdate checks" />
 </manifest>

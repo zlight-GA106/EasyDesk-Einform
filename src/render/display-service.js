@@ -38,7 +38,14 @@ export class DisplayService {
       if (selected) try { return await this.images.read(selected.imageId); }
       catch (e) { if (![404, 410].includes(e.status)) throw e; await this.registry.selectImage(id, null); }
     }
-    if (this.pending.has(id)) { if (!options.force) return this.pending.get(id); await this.pending.get(id); }
+    while (this.pending.has(id)) { if (!options.force) return this.pending.get(id); await this.pending.get(id); }
+    if (!options.force && this.config.render.generation.enabled && this.config.render.generation.refreshDevices && this.schedule.has(id)) {
+      const previous = await this.previous(id);
+      if (this.pending.has(id)) return this.pending.get(id);
+      // Meta polling must neither regenerate before the chosen interval nor postpone its deadline.
+      // Once due, the scheduler owns the force render and corresponding refresh command.
+      if (previous && previous.profile === device.profile && (previous.mode || 'normal') === (device.displayMode || 'normal')) return previous;
+    }
     const operation = this.generate(device, options).finally(() => this.pending.delete(id));
     this.pending.set(id, operation); return operation;
   }
@@ -69,8 +76,10 @@ export class DisplayService {
       if (model.mode === 'maintenance') model.maintenanceDevice = device;
       const profile = this.config.render.profiles[device.profile]; check(profile, '未知显示 profile');
       const dataHash = hash(JSON.stringify({ model, profile, renderer: this.renderer.signature }));
-      this.schedule.set(id, this.nextAt(device, weather, now.getTime()));
-      if (!force && previous?.dataHash === dataHash && Date.parse(previous.expiresAt) > now.getTime()) return previous;
+      if (!force && previous?.dataHash === dataHash && Date.parse(previous.expiresAt) > now.getTime()) {
+        if (!this.schedule.has(id) || Date.parse(this.schedule.get(id)) <= now.getTime()) this.schedule.set(id, this.nextAt(device, weather, now.getTime()));
+        return previous;
+      }
       const generatedAt = now.toISOString(), p = dateParts(now, this.config.server.timezone);
       const revision = `${p.date.replaceAll('-', '')}-${p.time.replace(':', '')}-${dataHash.slice(0, 12)}`;
       stage = 'render';
@@ -78,6 +87,7 @@ export class DisplayService {
       stage = 'cache_write';
       const current = await this.images.add({ revision, generatedAt, dataHash, internalUuid: device.preview ? null : id, deviceId: device.deviceId || null, profile: device.profile, width: profile.width, height: profile.height, location: model.device.location.name, source, mode: model.mode }, png);
       if (!device.preview) await atomicWrite(path.join(this.config.render.cacheDir, `${id}.json`), JSON.stringify({ ...current, png: undefined }));
+      this.schedule.set(id, this.nextAt(device, weather, now.getTime()));
       this.cache.set(id, current); this.log.info('png_generated', { deviceId: device.deviceId || 'preview', profile: device.profile, revision, imageId: current.imageId }); return current;
     } catch (error) {
       this.log.warn('png_failed', { deviceId: device.deviceId || 'preview', stage, errorCode: error.code || error.name, usingCache: Boolean(previous) });
@@ -90,7 +100,7 @@ export class DisplayService {
     const profile = body.profile, id = `preview-${profile}`, location = validateLocation(body.location || this.config.location);
     const title = boundedText(body.title || '', '标题', 40, true), text = boundedText(body.body || '', '正文', 500, true);
     check(body.auto === undefined || typeof body.auto === 'boolean', 'auto 必须为布尔值');
-    if (this.pending.has(id)) await this.pending.get(id);
+    while (this.pending.has(id)) await this.pending.get(id);
     const device = { internalUuid: id, profile, preview: true, location, displayMode: 'normal' };
     const work = this.generate(device, { force: !automatic, source: automatic ? 'automatic' : 'preview', previewContent: title || text ? { title, body: text } : null }).finally(() => this.pending.delete(id));
     this.pending.set(id, work); const result = await work;
@@ -104,7 +114,19 @@ export class DisplayService {
     for (let device of this.registry.list()) {
       await this.resolveSelection(device); device = this.registry.byUuid(device.internalUuid);
       if (device.selectedImageId || Date.parse(this.schedule.get(device.internalUuid) || 0) > now) continue;
-      try { await this.get(device.deviceId); } catch { this.schedule.set(device.internalUuid, new Date(now + 60000).toISOString()); }
+      try {
+        const push = this.config.render.generation.refreshDevices;
+        const image = await this.get(device.deviceId, { force: push, source: push ? 'scheduled' : 'automatic' });
+        if (push) {
+          // A manual snapshot or mode change during rendering owns the display selection.
+          const current = this.registry.byUuid(device.internalUuid);
+          if (!current.selectedImageId && current.profile === device.profile && (current.displayMode || 'normal') === (device.displayMode || 'normal')) {
+            const payload = { imageId: image.imageId, image: `/api/images/${image.imageId}.png`, revision: image.revision, automatic: true };
+            if (this.commands.enqueueAutomaticRefresh) await this.commands.enqueueAutomaticRefresh(device.internalUuid, payload, image.expiresAt, { profile: device.profile, mode: device.displayMode || 'normal' });
+            else await this.commands.enqueue(device.internalUuid, 'refresh', payload, image.expiresAt);
+          }
+        }
+      } catch { this.schedule.set(device.internalUuid, new Date(now + 60000).toISOString()); }
     }
     for (const job of Object.values(this.jobs.read())) {
       if (!job.auto || !Object.hasOwn(this.config.render.profiles, job.profile) || Date.parse(this.schedule.get(`preview-${job.profile}`) || 0) > now) continue;

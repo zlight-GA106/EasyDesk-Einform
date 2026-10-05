@@ -9,6 +9,7 @@ import { check } from '../errors.js';
 
 export async function installAdmin(app, system, config) {
   const { registry, weather, display, commands, images, log } = system;
+  display.commands = commands;
   const content = await new ContentStore(config, registry).init(); display.content = content;
   const settings = new Settings(config, weather, log, display);
   const profiles = new Profiles(config, registry, log, config.render.fallbackProfile);
@@ -16,7 +17,7 @@ export async function installAdmin(app, system, config) {
   const ok = (res, data) => res.json({ ok: true, data });
   app.get('/api/admin/devices', (req, res) => ok(res, registry.list()));
   app.get('/api/admin/device/:id', (req, res) => ok(res, { ...registry.byUuid(req.params.id), commands: commands.list(req.params.id) }));
-  app.put('/api/admin/device/:id', async (req, res) => { const device = await registry.edit(req.params.id, req.body); await commands.enqueue(device.internalUuid, 'reload_config'); ok(res, device); });
+  app.put('/api/admin/device/:id', async (req, res) => { const device = await registry.edit(req.params.id, req.body); display.schedule.delete(device.internalUuid); await commands.cancelAutomaticRefresh(device.internalUuid); await commands.enqueue(device.internalUuid, 'reload_config'); ok(res, device); });
   app.post('/api/admin/device/:id/refresh', async (req, res) => {
     const device = registry.byUuid(req.params.id), profile = config.render.profiles[device.profile];
     const imageId = req.body?.imageId;
@@ -24,23 +25,29 @@ export async function installAdmin(app, system, config) {
       const image = await images.read(imageId);
       image.image = `/api/images/${image.imageId}.png`;
       check(image.width === profile.width && image.height === profile.height, '缓存图片尺寸与设备不一致');
-      const command = await commands.enqueue(device.internalUuid, 'refresh', { imageId: image.imageId, image: image.image, revision: image.revision }, image.expiresAt);
-      await registry.selectImage(device.internalUuid, image.imageId); await registry.setMode(device.internalUuid, 'normal'); ok(res, command);
+      await registry.selectImage(device.internalUuid, image.imageId); await registry.setMode(device.internalUuid, 'normal');
+      await commands.cancelAutomaticRefresh(device.internalUuid);
+      ok(res, await commands.enqueue(device.internalUuid, 'refresh', { imageId: image.imageId, image: image.image, revision: image.revision }, image.expiresAt));
     } else {
       await registry.selectImage(device.internalUuid, null); await registry.setMode(device.internalUuid, 'normal');
+      await commands.cancelAutomaticRefresh(device.internalUuid);
       ok(res, await commands.enqueue(device.internalUuid, 'refresh'));
     }
   });
   for (const [route, type] of Object.entries({ 'force-redraw': 'force_redraw', 'show-maintenance': 'show_maintenance', 'restart-app': 'restart_app', 'reload-config': 'reload_config' })) {
     app.post(`/api/admin/device/:id/${route}`, async (req, res) => {
-      const command = await commands.enqueue(req.params.id, type);
-      if (type === 'show_maintenance') { await registry.selectImage(req.params.id, null); await registry.setMode(req.params.id, 'maintenance'); }
-      ok(res, command);
+      if (type === 'show_maintenance') { await registry.selectImage(req.params.id, null); await registry.setMode(req.params.id, 'maintenance'); await commands.cancelAutomaticRefresh(req.params.id); }
+      ok(res, await commands.enqueue(req.params.id, type));
     });
   }
-  app.post('/api/admin/device/:id/return-home', async (req, res) => { await registry.selectImage(req.params.id, null); await registry.setMode(req.params.id, 'normal'); ok(res, await commands.enqueue(req.params.id, 'refresh')); });
+  app.post('/api/admin/device/:id/return-home', async (req, res) => { await registry.selectImage(req.params.id, null); await registry.setMode(req.params.id, 'normal'); await commands.cancelAutomaticRefresh(req.params.id); ok(res, await commands.enqueue(req.params.id, 'refresh')); });
   app.get('/api/admin/images', (req, res) => ok(res, images.list()));
   app.get('/api/admin/images/trash', (req, res) => ok(res, images.list(true)));
+  app.delete('/api/admin/images/trash', async (req, res) => {
+    const { removedImageIds, ...result } = await images.emptyTrash();
+    for (const id of removedImageIds) { display.forgetImage(id); await commands.cancelImage(id); }
+    ok(res, result);
+  });
   app.delete('/api/admin/images/:id', async (req, res) => {
     const entry = await images.trash(req.params.id); display.forgetImage(entry.imageId); await commands.cancelImage(entry.imageId);
     for (const d of registry.list().filter(d => d.selectedImageId === entry.imageId)) { await registry.selectImage(d.internalUuid, null); display.invalidate(d.profile); await commands.enqueue(d.internalUuid, 'refresh'); }

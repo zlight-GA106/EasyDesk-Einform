@@ -51,6 +51,34 @@ export class ImageLibrary {
   restore(id) {
     return this.run(async () => { const entry = this.describe(id, Date.now(), true); await this.filePath(entry.file); await this.store.update(entries => { delete entries[entry.imageId].deletedAt; }); this.log.info('image_restored', { imageId: entry.imageId }); return this.describe(id); });
   }
+  emptyTrash() {
+    return this.run(async () => {
+      const entries = Object.values(this.store.read()), trash = entries.filter(e => e.deletedAt);
+      const selected = new Set(this.registry?.list().map(d => d.selectedImageId).filter(Boolean));
+      const liveFiles = new Set(entries.filter(e => !e.deletedAt).map(e => e.file));
+      const removedImageIds = []; let failed = 0, protectedCount = 0;
+      // Indexed names and hashes identify our PNGs. Never sweep a directory or follow links.
+      const root = path.resolve(this.config.render.cacheDir), rootStat = await fs.lstat(root);
+      const safeRoot = rootStat.isDirectory() && !rootStat.isSymbolicLink();
+      const realRoot = safeRoot ? await fs.realpath(root) : null;
+      for (const entry of trash) {
+        if (!safeRoot || selected.has(entry.imageId) || liveFiles.has(entry.file) || !managed.test(entry.file)) { protectedCount++; continue; }
+        const target = path.resolve(root, entry.file);
+        if (path.dirname(target) !== root) { protectedCount++; continue; }
+        try {
+          const stat = await fs.lstat(target);
+          if (!stat.isFile() || stat.isSymbolicLink() || path.dirname(await fs.realpath(target)) !== realRoot || pngHash(await fs.readFile(target)) !== entry.pngHash) { protectedCount++; continue; }
+          await fs.unlink(target);
+        } catch (error) {
+          if (error.code !== 'ENOENT') { failed++; this.log.warn('image_trash_clear_failed', { imageId: entry.imageId }); continue; }
+        }
+        removedImageIds.push(entry.imageId);
+      }
+      if (removedImageIds.length) await this.store.update(state => { for (const id of removedImageIds) delete state[id]; });
+      const result = { removed: removedImageIds.length, failed, protected: protectedCount, removedImageIds };
+      this.log.info('image_trash_cleared', { removed: result.removed, failed, protected: protectedCount }); return result;
+    });
+  }
   read(id) {
     return this.run(async () => { const entry = this.describe(id); const png = await fs.readFile(await this.filePath(entry.file)); if (pngHash(png) !== entry.pngHash) throw new ApiError(503, 'IMAGE_UNAVAILABLE', '图片校验失败，请重新生成'); return { ...entry, png }; });
   }

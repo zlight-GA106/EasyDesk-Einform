@@ -20,18 +20,24 @@ public final class HttpTransport {
         ImageResponse(boolean unchanged, String etag, String revision) { this.unchanged = unchanged; this.etag = etag; this.revision = revision; }
     }
     private final String base;
+    private volatile HttpURLConnection active;
     public HttpTransport(String base) { this.base = base; }
     private HttpURLConnection open(String path) throws IOException {
         // API URLs are same-server absolute paths, never arbitrary redirects or external URLs.
         if (!path.startsWith("/api/") || path.startsWith("//") || path.indexOf('\r') >= 0 || path.indexOf('\n') >= 0)
             throw new IOException("Invalid API path");
         HttpURLConnection connection = (HttpURLConnection)new URL(base + path).openConnection();
+        active = connection;
         connection.setConnectTimeout(7000); connection.setReadTimeout(12000);
         connection.setInstanceFollowRedirects(false); connection.setUseCaches(false);
         return connection;
     }
     public String json(String path, String body) throws IOException {
+        return json(path, body, 12000);
+    }
+    public String json(String path, String body, int readTimeout) throws IOException {
         HttpURLConnection connection = open(path);
+        connection.setReadTimeout(readTimeout);
         try {
             connection.setRequestProperty("Accept", "application/json");
             if (body != null) {
@@ -49,7 +55,7 @@ public final class HttpTransport {
                 ByteArrayOutputStream bytes = new ByteArrayOutputStream(); copy(input, bytes, 128 * 1024);
                 return new String(bytes.toByteArray(), "UTF-8");
             } finally { input.close(); }
-        } finally { connection.disconnect(); }
+        } finally { close(connection); }
     }
     public ImageResponse image(String path, String etag, File temporary) throws IOException {
         HttpURLConnection connection = open(path);
@@ -70,8 +76,10 @@ public final class HttpTransport {
             if (expected >= 0 && temporary.length() != expected) throw new IOException("Incomplete PNG response");
             PngGuard.validate(temporary);
             return new ImageResponse(false, value(connection.getHeaderField("ETag")), value(connection.getHeaderField("X-EasyDesk-Revision")));
-        } finally { connection.disconnect(); }
+        } finally { close(connection); }
     }
+    private void close(HttpURLConnection connection) { connection.disconnect(); if (active == connection) active = null; }
+    public void cancel() { HttpURLConnection connection = active; if (connection != null) connection.disconnect(); }
     private static void copy(InputStream input, OutputStream output, int limit) throws IOException {
         byte[] buffer = new byte[8192]; int count, total = 0;
         while ((count = input.read(buffer)) != -1) {

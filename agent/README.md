@@ -57,10 +57,18 @@ APK：`agent/dist/EasyDesk-Einform-Z9.apk`。连接 Z9 并开启 USB 调试，�
 
 ## 实现边界
 
-- Service 使用一个 HandlerThread 串行处理心跳和下载；心跳正常每 60 秒，检查图片采用服务器返回的间隔，失败退避 15–240 秒。重复启动 Service 不增加工作线程。前台通知保障 API 19 的持续运行；配置完成后接收开机广播。ROM 是否允许开机自启仍需真机检查。
+- Service 分别使用独立 HandlerThread 处理图片、心跳和长轮询命令；更新检查使用第四个独立线程。心跳正常每 60 秒，图片采用服务器返回的检查间隔，失败退避 15–240 秒。手动重绘可直接使用有效缓存，不等待心跳；绘制中收到的命令保留至当前序列完成，再顺序执行。重复启动 Service 不增加工作线程。前台通知保障 API 19 的持续运行；配置完成后接收开机广播。ROM 是否允许开机自启仍需真机检查。
 - 新图先下载临时文件，限制大小 8 MiB、检查 PNG 签名 / chunk 长度 / CRC / IEND，然后 RGB_565 解码并限制解码像素。原子保存 PNG 和带 SHA-256 的 metadata；断电恢复旧有效文件，metadata 不匹配时重新取图，避免误判版本未变。[AtomicFile 官方说明](https://developer.android.com/reference/android/util/AtomicFile)。
 - 清屏用原生 View / Canvas 和 Handler 延时。每一帧完成 `onDraw` 后才开始停留计时；界面暂停时取消序列，回来后重新执行待完成的序列。黑白帧不分配全屏 Bitmap。没有调用未知的 Z9 私有电子墨水波形接口，不能据模拟器结果宣称真机已完成硬件全刷。
-- 支持现有 heartbeat、meta、PNG ETag / 304、`refresh`、`force_redraw`、服务器维护 PNG、`reload_config` 和执行后 ACK。已完成命令保留 64 条用于重复投递去重。今晚未实现 `restart_app`，收到后明确 ACK failed。
+- 支持 heartbeat、meta、PNG ETag / 304、独立长轮询、`refresh`、`force_redraw`、服务器维护 PNG、`reload_config`、`restart_app` 和执行后 ACK。已完成命令保留 64 条用于去重；重启先持久化结果，再重启本 APP Activity / Service，恢复后补 ACK，保留 UUID、设置与 PNG。迟到的旧自动刷新不能覆盖更新的手动命令。
 - 前台保持屏幕唤醒，方便这次验收；尚未做长期低功耗策略、Radio、语音、LLM、自动发现、低电量覆盖层。这些不影响本次刷新链路，留待真机首次验收后再推进。
 
 测试方法与实际结果见 [VERIFY.md](VERIFY.md)。服务器继续使用原有 Docker 服务与 19900 端口，客户端测试数据只写入本机隔离目录。
+
+## Easyupdate 更新
+
+0.1.3-z9 / versionCode 4 接入 [Easyupdate](https://github.com/zlight-GA106/Easyupdate)。设置中填写更新服务根地址，默认 `http://192.168.95.55:19910`，点击「检查 APP 更新」查看版本说明。客户端按 API v1 上报 UUID / 包名 / 当前版本，启动和每日检查更新；更新网络与显示、命令、心跳独立。
+
+下载仅使用该更新服务的同源 APK 地址，拒绝重定向、错误包名及降级。保存前验证完整长度、SHA-256、包名、versionCode、同一签名和 minSdk。失败保留此前已校验的 APK、当前显示图片与配置。通过校验后打开系统安装器，由用户确认安装。KitKat 安装器仅支持文件地址时，只将已验证 APK 设为可读、其 updates 目录设为可遍历；临时下载、设置和 PNG 不共享。支持内容地址的安装器使用临时 URI 授权。
+
+若 ROM 禁止系统安装器更新，请按本页的 Z9 特殊安装方式使用同签名 APK。0.1.2 及更早版本没有 APP 内更新入口，首次迁移到本版需要手动安装。

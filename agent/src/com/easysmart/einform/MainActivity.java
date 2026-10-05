@@ -2,6 +2,7 @@ package com.easysmart.einform;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -9,6 +10,7 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -22,6 +24,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import com.easysmart.einform.core.RefreshSequence;
+import org.json.JSONObject;
 
 public final class MainActivity extends Activity implements AgentService.Listener, ScreenView.Controls {
     private final Handler handler = new Handler();
@@ -32,6 +35,8 @@ public final class MainActivity extends Activity implements AgentService.Listene
     private ToneGenerator tone;
     private boolean bound, resumed, failureSounded;
     private AlertDialog settings;
+    private AlertDialog updateDialog;
+    private ProgressDialog updateProgress;
     private String debugStatus = "等待连接", debugError = "none";
     private final Runnable diagnostics = new Runnable() {
         public void run() {
@@ -64,6 +69,7 @@ public final class MainActivity extends Activity implements AgentService.Listene
     }
     protected void onPause() {
         resumed = false;
+        if (updateProgress != null) { updateProgress.dismiss(); updateProgress = null; }
         if (sequence != null) { sequence.cancel(); sequence = null; }
         handler.removeCallbacksAndMessages(null);
         if (service != null) service.detach(this);
@@ -74,6 +80,8 @@ public final class MainActivity extends Activity implements AgentService.Listene
     }
     protected void onDestroy() {
         if (settings != null) settings.dismiss();
+        if (updateDialog != null) updateDialog.dismiss();
+        if (updateProgress != null) updateProgress.dismiss();
         if (tone != null) { tone.release(); tone = null; }
         super.onDestroy();
     }
@@ -117,6 +125,37 @@ public final class MainActivity extends Activity implements AgentService.Listene
         if (screen.waiting()) screen.diagnostics(DeviceDiagnostics.collect(this) + "\nStatus: " + debugStatus + "\nLast error: " + debugError);
     }
     public void timing(long displayedAt, long nextRefreshAt) { screen.timing(displayedAt, nextRefreshAt); }
+    public void restart() { finish(); }
+    public void update(final JSONObject release, String error, boolean downloaded) {
+        if (updateProgress != null) { updateProgress.dismiss(); updateProgress = null; }
+        if (!resumed) return;
+        if (error.length() > 0) { updateDialog = new AlertDialog.Builder(this).setTitle("APP 更新").setMessage(error).setPositiveButton("返回", null).show(); return; }
+        if (downloaded) {
+            try {
+                Intent install = UpdateProvider.installerIntent(this);
+                startActivityForResult(install, 19910);
+            } catch (Exception exception) { updateDialog = new AlertDialog.Builder(this).setTitle("已下载并校验 APK")
+                .setMessage("这台 ROM 未能打开系统安装器。可使用同签名 APK 通过 ADB 更新；原配置和图片仍保留。\n" + exception.getMessage()).setPositiveButton("返回", null).show(); }
+            return;
+        }
+        if (release == null || !release.optBoolean("update_available")) {
+            updateDialog = new AlertDialog.Builder(this).setTitle("APP 更新").setMessage("当前已是最新版本：" + AppConfig.VERSION).setPositiveButton("返回", null).show(); return;
+        }
+        String notes = release.optString("release_notes"); if (notes.length() > 6000) notes = notes.substring(0,6000);
+        updateDialog = new AlertDialog.Builder(this).setTitle("新版本 " + release.optString("version_name"))
+            .setMessage((release.optBoolean("mandatory") ? "服务器标记为必要更新。\n" : "") + notes + "\n\nAPK 将校验大小、SHA-256、包名、版本和签名；安装由系统确认。")
+            .setPositiveButton("下载并安装", new DialogInterface.OnClickListener() { public void onClick(DialogInterface dialog, int which) {
+                if (service != null) { updateProgress = ProgressDialog.show(MainActivity.this, "APP 更新", "正在下载并校验 APK……", true, false); service.downloadUpdate(release); }
+            } }).setNegativeButton("返回", null).show();
+    }
+    protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request == 19910 && result == RESULT_FIRST_USER) {
+            updateDialog = new AlertDialog.Builder(this).setTitle("安装未完成")
+                .setMessage("系统安装器拒绝更新（ROM 安装限制或签名 / 包校验错误）。可用同签名 APK 通过 ADB 更新；现有设置和缓存保留。")
+                .setPositiveButton("返回", null).show();
+        }
+    }
     private void beep(int millis, boolean error) {
         if (!new AppConfig(this).sound || tone == null) return;
         try {
@@ -136,6 +175,7 @@ public final class MainActivity extends Activity implements AgentService.Listene
         LinearLayout form = new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
         int pad = (int)(12 * getResources().getDisplayMetrics().density); form.setPadding(pad,pad,pad,pad);
         final EditText server = field(form, "服务器根地址", config.server);
+        final EditText updateServer = field(form, "Easyupdate 更新服务根地址", config.updateServer);
         final EditText device = field(form, "首次注册设备 ID（注册后由后台改名）", config.deviceId);
         final EditText site = field(form, "站点 ID", config.siteId);
         final EditText profile = field(form, "服务端 Profile 文件 ID（留空使用默认）", config.profile);
@@ -148,19 +188,28 @@ public final class MainActivity extends Activity implements AgentService.Listene
         TextView help = new TextView(this); help.setText("点击右上角：检查更新；长按：用有效图片完整清屏。\n分辨率：" + display.widthPixels + "×" + display.heightPixels + " px\nUUID：" + config.uuid + "\n版本：" + AppConfig.VERSION); form.addView(help);
         ScrollView scroll = new ScrollView(this); scroll.addView(form);
         settings = new AlertDialog.Builder(this).setTitle("连接与清屏设置").setView(scroll)
-            .setPositiveButton("保存并连接", null).setNegativeButton("返回", null).create();
+            .setPositiveButton("保存并连接", null).setNegativeButton("返回", null).setNeutralButton("检查 APP 更新", null).create();
         settings.setOnShowListener(new DialogInterface.OnShowListener() { public void onShow(DialogInterface dialog) {
+            settings.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(new android.view.View.OnClickListener() { public void onClick(android.view.View view) {
+                if (service == null) return;
+                try {
+                    String address = AppConfig.validServer(updateServer.getText().toString());
+                    if (!config.preferences.edit().putString("updateServer", address).commit()) throw new Exception("更新服务地址保存失败");
+                    settings.dismiss(); updateProgress = ProgressDialog.show(MainActivity.this, "APP 更新", "正在检查 Easyupdate……", true, false); service.checkUpdate();
+                } catch (Exception exception) { updateServer.setError(exception.getMessage()); }
+            } });
             settings.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new android.view.View.OnClickListener() {
                 public void onClick(android.view.View view) {
                     try {
                         String address = AppConfig.validServer(server.getText().toString());
+                        String updates = AppConfig.validServer(updateServer.getText().toString());
                         String deviceId = AppConfig.validId(device.getText().toString());
                         String siteId = AppConfig.validId(site.getText().toString());
                         String profileId = profile.getText().toString().trim();
                         if (profileId.length() > 0 && !profileId.matches("[a-zA-Z0-9_-]{1,64}")) throw new Exception("Profile ID 只能包含英文、数字、下划线或短横线");
                         int milliseconds = Integer.parseInt(dwell.getText().toString());
                         if (milliseconds < 300 || milliseconds > 3000) throw new Exception("停留时间为 300–3000 毫秒");
-                        boolean saved = config.preferences.edit().putString("server", address).putString("deviceId", deviceId).putString("siteId", siteId)
+                        boolean saved = config.preferences.edit().putString("server", address).putString("updateServer", updates).putString("deviceId", deviceId).putString("siteId", siteId)
                             .putString("profile", profileId).putInt("dwell", milliseconds).putBoolean("sound", sound.isChecked())
                             .putBoolean("deep", deep.isChecked()).putBoolean("clean", clean.isChecked()).putBoolean("configured", true).commit();
                         if (!saved) throw new Exception("保存失败，请检查存储空间");

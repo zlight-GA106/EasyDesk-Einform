@@ -4,7 +4,7 @@ EasySmart 生态的局域网电子墨水终端服务端。服务器聚合黄历�
 
 Android 显示终端已加入同一仓库：[Z9 APK 构建、安装与首次验收](agent/README.md)。首版聚焦下载校验、缓存与「清洁提示 → 黑 → 白 → 新页面 → 短滴」。
 
-下载已验证的 Android 4.4 / API 19 APK 与完整源码包：[GitHub Releases](https://github.com/zlight-GA106/EasyDesk-Einform/releases)。当前版本为 `v0.1.2-z9`，参见 [发布说明](docs/RELEASE-v0.1.2-z9.md)。服务器源码包包含 Dockerfile 与 Compose 配置，部署步骤见 [Docker 文档](docs/DOCKER.md)。
+下载 Android 4.4 / API 19 APK 与完整源码包：[GitHub Releases](https://github.com/zlight-GA106/EasyDesk-Einform/releases)。当前版本为 `v0.1.3-z9`，参见 [发布说明](docs/RELEASE-v0.1.3-z9.md)。服务器源码包包含 Dockerfile 与 Compose 配置，部署步骤见 [Docker 文档](docs/DOCKER.md)。
 
 ## 启动
 
@@ -52,6 +52,10 @@ Host 不含协议或路径。凭据仅保存在本地，不会回显给前端或
 
 命令采用至少一次投递，直到 ACK 或过期。Android 必须以命令 ID 去重并持久化已完成 ID，避免重复重启。允许 `refresh`、`force_redraw`、`show_maintenance`、`restart_app`、`reload_config`，无任意 shell 执行接口。默认命令有效 24 小时，每设备最多 100 条待处理，完成记录保存 7 天。
 
+新版终端通过独立长轮询即时领取命令，heartbeat 只负责注册、状态上报和旧客户端兼容。手动重绘可直接使用已校验的本地图片；维护页与重启命令不等待心跳或定时图片检查。重启前持久化命令结果，恢复后补 ACK，保留 UUID、配置与缓存。接口见 [客户端协议](docs/API.md)。
+
+终端接入 [Easyupdate](https://github.com/zlight-GA106/Easyupdate)，默认更新地址为 `http://192.168.95.55:19910`，可在 APP 设置中修改并手动检查更新。下载后校验大小、SHA-256、包名、版本、签名及最低 Android 版本，再交由系统安装器；保留同一签名以更新已有安装。
+
 后台「维护页面」令服务器生成维护 PNG 并下发 show_maintenance；「返回主页」恢复普通 PNG 并下发 refresh。客户端本地长按维护页面、右上角刷新交互和断网低电量提示由 Android 实现。服务端 PNG 不叠加低电量警告。
 
 ## 排版与缓存
@@ -63,6 +67,8 @@ Host 不含协议或路径。凭据仅保存在本地，不会回显给前端或
 PNG 内容签名含日期、天气、设备显示配置、在线状态、当前内容、字体 / 模板签名和分辨率；普通 heartbeat 的非显示指标不会触发重绘。输入相同则不渲染，ETag 支持 If-None-Match / 304。先保存有效 PNG，再原子切换 metadata；失败返回旧 PNG，并设置 X-EasyDesk-Stale。PNG 保存为 UUID 对象并建立持久化索引；默认保留三天，过期自动清理，仅处理本项目索引中的图片。可以生成独立预览或设备新 PNG，并从历史缓存选择下发到尺寸匹配的设备。手动选择会保留到图片过期，再恢复自动生成。详见 [图片缓存与自动生成](docs/IMAGES.md)。
 
 自定义内容支持标题、正文、起止时间和优先级。当前显示最高优先级的一条，在页脚两行内排版，超长部分截断；其余内容保留在后台。结束时间到达后自动退出显示。
+
+图片预览页可按小时设置自动生成，并开启「生成新 PNG 后自动刷新 APP 内容」。固定间隔不会被客户端取图推迟；自适应模式可在天气或定时内容变化时提前更新。手动选用的快照保持至到期或切回自动图片，回收站可一键永久清空。旧配置的自动强制重绘开关默认关闭，升级保留原配置。
 
 ## 目录与运行
 
