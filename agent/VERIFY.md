@@ -126,3 +126,13 @@ Easyupdate 使用全局 PublicURL 公告下载地址，可能与终端的转发�
 进一步用 Z9 原始 TCP 请求核对：对 `192.168.3.32:19910` 的八组 GET（HTTP/1.0 与 1.1、转发及原服务器 Host、根路径及 latest 接口）均在约 2.5–2.8 秒结束，收到零字节，没有 HTTP 状态行。相同方法访问 `192.168.3.32:19900/api/health` 返回 `200 OK`；设备 loopback 的 19910 拒绝连接，Android 全局代理未启用。由此排除 APP 响应解析及请求参数问题，故障仍位于 19910 的转发 / 上游链路，未确定具体关闭连接的一跳。
 
 证据在 `artifacts/update-alias-20261005/`：`android-build.log`、`core-checks.txt`、`update-instrumentation.txt`、`update-fixture-requests.json`、`installer-confirmation.png`、`z9-install-report.json`、`z9-update-report.json`、`z9-final.png`、`server-update-network.json` 与 `z9-forward-diagnostics.txt`。真机旧 APK 和原设置仍仅保存在本机忽略目录；0.1.3 发布资产保留。
+
+## 2026-10-05 10:05 隧道修正后的 Easyupdate 实机联网验收
+
+用户修正隧道方向后，Z9 使用原配置的 `http://192.168.3.32:19910` 已正常访问更新服务，无需修改 APP 或服务端配置。
+
+- 在 Z9 查询 code4 得到 0.1.4-z9 / code5 更新，查询 code5 得到 `update_available=false`。从转发地址的固定版本下载路径实际取得 49,626 bytes APK，设备 SHA-256 与回读文件 SHA-256 均为上述 0.1.4 发布哈希；没有安装重复版本。
+- 真机设置中的「检查 APP 更新」成功显示「当前已是最新版本：0.1.4-z9」，保存的成功检查时间及 metadata 与该次操作一致。UUID、显示 / 更新根地址、Profile、清屏、声音及停留参数保留。
+- 通过后台 restart_app 命令 17 重新启动真实 APP，命令完成、页面恢复，启动时独立更新线程成功检查版本，之后没有更新检查 / 心跳错误。Easyupdate 设备页实际记录了同一真实 UUID 的 0.1.4-z9 / code5 心跳，首次及最近连接显示为 `2026-10-05 10:05`；仅读取服务器记录，没有伪造心跳。显示服务继续上报在线，原维护模式及图片选择保留；系统分区保持只读。
+
+证据在 Git 忽略的 `artifacts/tunnel-fixed-20261005/`：`verification.json`、`latest-code4.json`、`latest-code5.json`、`app-ui-report.json`、`update-result.png`、`app-restart-report.json`、`app-restart.log` 与 `easyupdate-device-heartbeat.json`。这次确认真实设备的网络、版本接口、公开 APK 下载、APP 内检查及更新心跳可用；新版本 APK 经受限 ROM 系统安装器完成安装的实机流程仍未验证，之前的隔离模拟器安装确认页测试与此区分。
